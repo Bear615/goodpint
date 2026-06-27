@@ -1,0 +1,19 @@
+{
+  "name": "goodpint",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GoodPint Android loyalty, wallet, venue discovery, and QR redemption app.",
+  "scripts": {
+    "dev": "concurrently \"npm --prefix packages/api run dev\" \"npm --prefix apps/mobile run start\"",
+    "dev:web": "concurrently \"npm --prefix packages/api run dev\" \"npm --prefix apps/mobile run web\"",
+    "dev:api": "npm --prefix packages/api run dev",
+    "dev:mobile": "npm --prefix apps/mobile run start",
+    "android": "npm --prefix apps/mobile run android",
+    "web": "npm --prefix apps/mobile run web",
+    "typecheck": "npm --prefix apps/mobile run typecheck && npm --prefix packages/api run typecheck",
+    "build:api": "npm --prefix packages/api run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

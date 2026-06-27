@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+**/node_modules/
+
+# Expo / React Native
+.expo/
+**/.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# generated builds
+packages/api/dist/
+
+# local runtime output
+.codex/
+*.log
+
+# environment
+.env
+.env.*
+!.env.example
+
+# TypeScript
+*.tsbuildinfo
+
+# OS/editor
+.DS_Store
+Thumbs.db
