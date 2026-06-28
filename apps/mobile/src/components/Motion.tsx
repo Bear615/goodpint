@@ -1,5 +1,5 @@
 import type { PropsWithChildren, ReactNode } from 'react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 const useNativeMotion = Platform.OS !== 'web';
@@ -12,79 +12,128 @@ interface AnimatedScreenProps extends PropsWithChildren {
 
 export function AnimatedScreen({ animationKey, children, direction, variant = 'push' }: AnimatedScreenProps) {
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(18)).current;
+  const translateY = useRef(new Animated.Value(variant === 'push' ? 18 : 0)).current;
   const translateX = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(variant === 'tab' ? 0.97 : 0.985)).current;
 
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      return undefined;
-    }
+  const prevTranslateX = useRef(new Animated.Value(0)).current;
+  const [exitingContent, setExitingContent] = useState<ReactNode>(null);
+  const runningAnim = useRef<Animated.CompositeAnimation | null>(null);
+
+  // Capture previous children during render (before key change propagates to effect).
+  // Only update when key is stable so we hold the old value when key changes.
+  const prevKeyForRender = useRef(animationKey);
+  const prevChildrenRef = useRef<ReactNode>(children);
+  if (prevKeyForRender.current !== animationKey) {
+    prevKeyForRender.current = animationKey;
+  } else {
+    prevChildrenRef.current = children;
+  }
+
+  const prevKeyRef = useRef('');
+
+  // Phase 1: set initial positions BEFORE paint (prevents flash on web where useEffect fires after paint)
+  useLayoutEffect(() => {
+    const firstRun = prevKeyRef.current === '';
+    const keyChanged = !firstRun && prevKeyRef.current !== animationKey;
+
+    if (!firstRun && !keyChanged) return;
+
+    runningAnim.current?.stop();
 
     const screenWidth = Dimensions.get('window').width;
 
-    opacity.setValue(0);
-    scale.setValue(variant === 'tab' ? 0.97 : 0.985);
-
-    if (variant === 'push') {
-      translateY.setValue(18);
+    if (firstRun) {
+      opacity.setValue(0);
+      scale.setValue(variant === 'tab' ? 0.97 : 0.985);
       translateX.setValue(0);
-    } else if (direction) {
+      if (variant === 'push') translateY.setValue(18);
+    } else if (variant === 'tab' && direction) {
+      // New screen starts off-screen; mount exiting content synchronously before paint
       translateX.setValue(direction === 'right' ? screenWidth : -screenWidth);
+      prevTranslateX.setValue(0);
+      opacity.setValue(1);
+      scale.setValue(1);
+      setExitingContent(prevChildrenRef.current);
     } else {
+      setExitingContent(null);
+      opacity.setValue(0);
+      scale.setValue(variant === 'push' ? 0.985 : 0.97);
       translateX.setValue(0);
+      if (variant === 'push') translateY.setValue(18);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animationKey, direction, variant]);
 
-    const animations: Animated.CompositeAnimation[] = [
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: variant === 'tab' ? 210 : 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: useNativeMotion,
-      }),
-      Animated.timing(scale, {
-        toValue: 1,
-        duration: variant === 'tab' ? 280 : 380,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: useNativeMotion,
-      }),
-    ];
+  // Phase 2: start animations after DOM is ready
+  useEffect(() => {
+    const firstRun = prevKeyRef.current === '';
+    const keyChanged = !firstRun && prevKeyRef.current !== animationKey;
 
-    if (variant === 'push') {
-      animations.push(
-        Animated.timing(translateY, {
-          toValue: 0,
-          duration: 380,
+    if (!firstRun && !keyChanged) return;
+
+    const screenWidth = Dimensions.get('window').width;
+
+    if (firstRun) {
+      const anims: Animated.CompositeAnimation[] = [
+        Animated.timing(opacity, { toValue: 1, duration: variant === 'tab' ? 210 : 320, easing: Easing.out(Easing.cubic), useNativeDriver: useNativeMotion }),
+        Animated.timing(scale, { toValue: 1, duration: variant === 'tab' ? 280 : 380, easing: Easing.out(Easing.cubic), useNativeDriver: useNativeMotion }),
+      ];
+      if (variant === 'push') {
+        anims.push(Animated.timing(translateY, { toValue: 0, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: useNativeMotion }));
+      }
+      runningAnim.current = Animated.parallel(anims);
+      runningAnim.current.start();
+    } else if (variant === 'tab' && direction) {
+      runningAnim.current = Animated.parallel([
+        Animated.timing(translateX, { toValue: 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: useNativeMotion }),
+        Animated.timing(prevTranslateX, {
+          toValue: direction === 'right' ? -screenWidth : screenWidth,
+          duration: 300,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: useNativeMotion,
         }),
-      );
-    } else if (direction) {
-      animations.push(
-        Animated.timing(translateX, {
-          toValue: 0,
-          duration: 280,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: useNativeMotion,
-        }),
-      );
+      ]);
+      runningAnim.current.start(({ finished }) => { if (finished) setExitingContent(null); });
+    } else if (variant === 'push') {
+      runningAnim.current = Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: useNativeMotion }),
+        Animated.timing(scale, { toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: useNativeMotion }),
+        Animated.timing(translateY, { toValue: 0, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: useNativeMotion }),
+      ]);
+      runningAnim.current.start();
+    } else {
+      runningAnim.current = Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 210, easing: Easing.out(Easing.cubic), useNativeDriver: useNativeMotion }),
+        Animated.timing(scale, { toValue: 1, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: useNativeMotion }),
+      ]);
+      runningAnim.current.start();
     }
 
-    Animated.parallel(animations).start();
-  }, [animationKey, direction, opacity, scale, translateX, translateY, variant]);
+    prevKeyRef.current = animationKey;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animationKey, direction, variant]);
 
-  if (Platform.OS === 'web') {
-    return <View style={styles.screen}>{children}</View>;
+  // Carousel: both screens visible and sliding simultaneously
+  if (exitingContent) {
+    return (
+      <View style={[styles.screen, styles.carouselClip]}>
+        <Animated.View
+          style={[StyleSheet.absoluteFill, { transform: [{ translateX: prevTranslateX }], pointerEvents: 'none' }]}
+        >
+          {exitingContent}
+        </Animated.View>
+        <Animated.View style={[styles.screen, { transform: [{ translateX }] }]}>
+          {children}
+        </Animated.View>
+      </View>
+    );
   }
 
-  let transform: object[];
-  if (variant === 'push') {
-    transform = [{ translateY }, { scale }];
-  } else if (direction) {
-    transform = [{ translateX }, { scale }];
-  } else {
-    transform = [{ scale }];
-  }
+  const transform: object[] =
+    variant === 'push' ? [{ translateY }, { scale }] :
+    direction ? [{ translateX }, { scale }] :
+    [{ scale }];
 
   return (
     <Animated.View style={[styles.screen, { opacity, transform }]}>
@@ -186,5 +235,8 @@ export function AmbientPulse({ children, intensity = 1, style }: AmbientPulsePro
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+  },
+  carouselClip: {
+    overflow: 'hidden',
   },
 });

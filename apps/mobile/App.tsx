@@ -1,5 +1,8 @@
+import * as Haptics from 'expo-haptics';
+import * as Location from 'expo-location';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BottomNav } from './src/components/BottomNav';
 import { AnimatedScreen } from './src/components/Motion';
 import { ScreenFrame } from './src/components/ScreenFrame';
@@ -11,8 +14,10 @@ import { PointsScreen } from './src/screens/PointsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { RedeemScreen } from './src/screens/RedeemScreen';
 import { WalletScreen } from './src/screens/WalletScreen';
-import { createOrder, getAppState, topUpWallet } from './src/services/api';
-import type { AppStatePayload, CartItem, FilterKey, TabKey, Transaction, WalletState } from './src/types';
+import { createOrder, getAppState, getRatings, getUserRatings, submitReview, topUpWallet } from './src/services/api';
+import { getUserId } from './src/utils/userId';
+import type { AppStatePayload, CartItem, FilterKey, OsmPub, RatingMap, TabKey, Transaction, WalletState } from './src/types';
+import { fetchNearbyPubs } from './src/utils/pubs';
 
 type NestedRoute = { name: 'redeem'; rewardId: string } | { name: 'buy'; venueId: string } | null;
 
@@ -33,6 +38,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('explore');
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterKey>('nearby');
+  const [locationStatus, setLocationStatus] = useState<'pending' | 'granted' | 'denied'>('pending');
+  const [userCoords, setUserCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [osmPubs, setOsmPubs] = useState<OsmPub[]>([]);
+  const [pubsLoading, setPubsLoading] = useState(false);
+  const [pubsError, setPubsError] = useState(false);
+  const [ratings, setRatings] = useState<RatingMap>({});
+  const [userRatings, setUserRatings] = useState<Record<string, number>>({});
   const [route, setRoute] = useState<NestedRoute>(null);
   const [cart, setCart] = useState<CartItem[]>([{ drinkId: initialAppState.drinks[0].id, quantity: 1 }]);
   const [secondsRemaining, setSecondsRemaining] = useState(299);
@@ -56,9 +68,85 @@ export default function App() {
         // The mobile app is intentionally useful without the local API running.
       });
 
+    getRatings()
+      .then((remoteRatings) => {
+        if (mounted) setRatings(remoteRatings);
+      })
+      .catch(() => undefined);
+
+    getUserId()
+      .then((userId) => getUserRatings(userId))
+      .then((remoteUserRatings) => {
+        if (mounted) setUserRatings(remoteUserRatings);
+      })
+      .catch(() => undefined);
+
     return () => {
       mounted = false;
     };
+  }, []);
+
+  const handleSubmitReview = async (pubId: string, rating: number, pubName: string) => {
+    const userId = await getUserId();
+    const prevUserRating = userRatings[pubId];
+
+    // Optimistic update: if new review add to count, if update keep count.
+    setUserRatings((current) => ({ ...current, [pubId]: rating }));
+    setRatings((current) => {
+      const prev = current[pubId] ?? { average: 0, count: 0 };
+      if (prevUserRating) {
+        // Updating existing: replace old rating in the average.
+        const average = Number(((prev.average * prev.count - prevUserRating + rating) / prev.count).toFixed(1));
+        return { ...current, [pubId]: { average, count: prev.count } };
+      }
+      const count = prev.count + 1;
+      const average = Number(((prev.average * prev.count + rating) / count).toFixed(1));
+      return { ...current, [pubId]: { average, count } };
+    });
+
+    submitReview({ pubId, userId, rating, pubName })
+      .then((result) => {
+        setRatings((current) => ({ ...current, [pubId]: { average: result.average, count: result.count } }));
+        setPoints(result.points);
+      })
+      .catch(() => undefined);
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (!mounted) return;
+
+      if (status !== 'granted') {
+        setLocationStatus('denied');
+        return;
+      }
+
+      setLocationStatus('granted');
+      console.log('[location] permission granted, getting position...');
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      if (!mounted) return;
+
+      const { latitude: lat, longitude: lon } = pos.coords;
+      console.log('[location] got coords', lat, lon);
+      setUserCoords({ lat, lon });
+      setPubsLoading(true);
+
+      try {
+        const pubs = await fetchNearbyPubs(lat, lon, lat, lon);
+        if (!mounted) return;
+        setOsmPubs(pubs);
+      } catch (err) {
+        console.error('[pubs] fetchNearbyPubs failed:', err);
+        if (mounted) setPubsError(true);
+      } finally {
+        if (mounted) setPubsLoading(false);
+      }
+    })();
+
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
@@ -99,6 +187,7 @@ export default function App() {
     setSwipeDirection(nextIdx > currentIdx ? 'right' : nextIdx < currentIdx ? 'left' : null);
     setActiveTab(tab);
     setRoute(null);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const openRedeem = (rewardId?: string) => {
@@ -107,6 +196,7 @@ export default function App() {
     setSwipeDirection(null);
     setActiveTab('points');
     setRoute({ name: 'redeem', rewardId: nextRewardId });
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const openBuy = (venueId: string) => {
@@ -114,6 +204,7 @@ export default function App() {
     setActiveTab('explore');
     setCart([{ drinkId: data.drinks[0]?.id ?? 'goodpint-lager', quantity: 1 }]);
     setRoute({ name: 'buy', venueId });
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const changeQuantity = (drinkId: string, delta: number) => {
@@ -158,6 +249,7 @@ export default function App() {
     setSwipeDirection(null);
     setRoute(null);
     setActiveTab('wallet');
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     void createOrder({ venueId: selectedVenue.id, items: cart }).catch(() => undefined);
     Alert.alert('Drink booked', `Your order at ${selectedVenue.name} is ready for pickup soon.`);
@@ -171,6 +263,7 @@ export default function App() {
       balance: Number((currentWallet.balance + amount).toFixed(2)),
     }));
     setTransactions((currentTransactions) => [nowTransaction('Wallet top up', amount), ...currentTransactions]);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     void topUpWallet({ amount }).catch(() => undefined);
   };
 
@@ -180,6 +273,11 @@ export default function App() {
 
   const bottomNav = <BottomNav activeTab={activeTab} onTabChange={changeTab} />;
 
+  const goBack = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRoute(null);
+  };
+
   let content;
 
   if (route?.name === 'redeem') {
@@ -188,7 +286,7 @@ export default function App() {
         points={points}
         reward={selectedReward}
         secondsRemaining={secondsRemaining}
-        onBack={() => setRoute(null)}
+        onBack={goBack}
       />
     );
   } else if (route?.name === 'buy') {
@@ -198,7 +296,7 @@ export default function App() {
         drinks={data.drinks}
         cart={cart}
         total={cartTotal}
-        onBack={() => setRoute(null)}
+        onBack={goBack}
         onChangeQuantity={changeQuantity}
         onPay={payForOrder}
       />
@@ -229,11 +327,17 @@ export default function App() {
   } else {
     content = (
       <ExploreScreen
-        venues={data.venues}
         selectedFilter={selectedFilter}
         onFilterChange={setSelectedFilter}
-        onOpenBuy={openBuy}
         onOpenRedeem={() => openRedeem()}
+        locationStatus={locationStatus}
+        userCoords={userCoords}
+        osmPubs={osmPubs}
+        pubsLoading={pubsLoading}
+        pubsError={pubsError}
+        ratings={ratings}
+        userRatings={userRatings}
+        onSubmitReview={handleSubmitReview}
       />
     );
   }
@@ -251,8 +355,10 @@ export default function App() {
   };
 
   return (
-    <ScreenFrame bottomNav={bottomNav} scrollKey={animationKey} onSwipeLeft={swipeLeft} onSwipeRight={swipeRight}>
-      <AnimatedScreen animationKey={animationKey} variant={route ? 'push' : 'tab'} direction={route ? null : swipeDirection}>{content}</AnimatedScreen>
-    </ScreenFrame>
+    <SafeAreaProvider>
+      <ScreenFrame bottomNav={bottomNav} scrollKey={animationKey} onSwipeLeft={swipeLeft} onSwipeRight={swipeRight}>
+        <AnimatedScreen animationKey={animationKey} variant={route ? 'push' : 'tab'} direction={route ? null : swipeDirection}>{content}</AnimatedScreen>
+      </ScreenFrame>
+    </SafeAreaProvider>
   );
 }

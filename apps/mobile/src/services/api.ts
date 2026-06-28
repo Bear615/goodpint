@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import type { AppStatePayload, CartItem } from '../types';
+import type { AppStatePayload, CartItem, PubRating, RatingMap } from '../types';
 
 const runtime = globalThis as typeof globalThis & {
   process?: { env?: Record<string, string | undefined> };
@@ -57,6 +57,21 @@ export async function topUpWallet(payload: { amount: number }) {
 
 export async function checkIn(payload: { venueId: string }) {
   return request<{ points: number; pointsEarned: number }>('/api/check-ins', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getRatings() {
+  return request<RatingMap>('/api/reviews/ratings');
+}
+
+export async function getUserRatings(userId: string) {
+  return request<Record<string, number>>(`/api/reviews/user-ratings?userId=${encodeURIComponent(userId)}`);
+}
+
+export async function submitReview(payload: { pubId: string; userId: string; rating: number; pubName?: string }) {
+  return request<PubRating & { pubId: string; points: number }>('/api/reviews', {
     method: 'POST',
     body: JSON.stringify(payload),
   });

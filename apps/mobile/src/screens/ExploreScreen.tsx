@@ -1,68 +1,73 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
-  Image,
+  ActivityIndicator,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { Beer, ChevronRight, LocateFixed, MapPin, Search, SlidersHorizontal, Star, Zap } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Beer, ChevronRight, LocateFixed, Navigation, Search, SlidersHorizontal, Zap } from 'lucide-react-native';
 import { filters } from '../data/goodpint';
 import { colors, font, radii } from '../theme';
-import type { FilterKey, Venue } from '../types';
-import { GoldButton } from '../components/GoldButton';
-import { AmbientPulse, PressableScale } from '../components/Motion';
-import { SectionCard } from '../components/SectionCard';
+import type { FilterKey, OsmPub, RatingMap } from '../types';
+import { NativeMap, type NativeMapRef } from '../components/NativeMap';
+import { PressableScale } from '../components/Motion';
+import { RatingStars } from '../components/RatingStars';
+import { PubDetailModal } from '../components/PubDetailModal';
 
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 interface ExploreScreenProps {
-  venues: Venue[];
   selectedFilter: FilterKey;
   onFilterChange: (filter: FilterKey) => void;
-  onOpenBuy: (venueId: string) => void;
   onOpenRedeem: () => void;
+  locationStatus: 'pending' | 'granted' | 'denied';
+  userCoords: { lat: number; lon: number } | null;
+  osmPubs: OsmPub[];
+  pubsLoading: boolean;
+  pubsError: boolean;
+  ratings: RatingMap;
+  userRatings: Record<string, number>;
+  onSubmitReview: (pubId: string, rating: number, pubName: string) => void;
 }
 
 export function ExploreScreen({
-  venues,
   selectedFilter,
   onFilterChange,
-  onOpenBuy,
   onOpenRedeem,
+  locationStatus,
+  userCoords,
+  osmPubs,
+  pubsLoading,
+  pubsError,
+  ratings,
+  userRatings,
+  onSubmitReview,
 }: ExploreScreenProps) {
   const [query, setQuery] = useState('');
+  const [selectedPub, setSelectedPub] = useState<OsmPub | null>(null);
+  const nativeMapRef = useRef<NativeMapRef>(null);
 
-  const visibleVenues = useMemo(() => {
+  const recenter = () => {
+    if (userCoords) {
+      nativeMapRef.current?.recenter(userCoords.lat, userCoords.lon);
+    }
+  };
+
+  const visiblePubs = useMemo(() => {
     const text = query.trim().toLowerCase();
-
-    return venues.filter((venue) => {
-      const matchesQuery =
-        text.length === 0 ||
-        venue.name.toLowerCase().includes(text) ||
-        venue.area.toLowerCase().includes(text) ||
-        venue.tags.some((tag) => tag.toLowerCase().includes(text));
-
-      if (!matchesQuery) {
-        return false;
-      }
-
-      if (selectedFilter === 'nearby') {
-        return venue.distanceMiles <= 0.8;
-      }
-
-      if (selectedFilter === 'top-rated') {
-        return venue.rating >= 4.6;
-      }
-
-      if (selectedFilter === 'happy-hour') {
-        return venue.tags.includes('Happy Hour');
-      }
-
-      return venue.tags.includes('Live Music');
+    const filtered = osmPubs.filter((pub) => {
+      if (text && !pub.name.toLowerCase().includes(text)) return false;
+      if (selectedFilter === 'nearby') return pub.distanceMiles <= 1.5;
+      return true;
     });
-  }, [query, selectedFilter, venues]);
 
-  const activeVenue = visibleVenues[0] ?? venues[0];
+    if (selectedFilter === 'top-rated') {
+      return [...filtered].sort((a, b) => (ratings[b.id]?.average ?? 0) - (ratings[a.id]?.average ?? 0));
+    }
+    return filtered;
+  }, [osmPubs, query, selectedFilter, ratings]);
 
   return (
     <View>
@@ -79,7 +84,7 @@ export function ExploreScreen({
           </View>
         </View>
         <PressableScale accessibilityLabel="Open redeem" onPress={onOpenRedeem} style={styles.notificationButton}>
-          <MapPin color={colors.gold} size={22} strokeWidth={1.9} />
+          <Beer color={colors.gold} size={22} strokeWidth={1.9} />
         </PressableScale>
       </View>
 
@@ -99,7 +104,6 @@ export function ExploreScreen({
       <View style={styles.filterRow}>
         {filters.map((filter) => {
           const active = selectedFilter === filter.id;
-
           return (
             <PressableScale
               key={filter.id}
@@ -115,77 +119,94 @@ export function ExploreScreen({
         })}
       </View>
 
+      {/* Real OSM map */}
       <View style={styles.mapWrap}>
-        <LinearGradient colors={['#111416', '#0A0C0E', '#070708']} style={styles.mapBase}>
-          <LinearGradient
-            pointerEvents="none"
-            colors={['rgba(255,255,255,0.018)', 'rgba(244,200,74,0.024)', 'rgba(0,0,0,0)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.mapTint}
-          />
-          <View style={[styles.mapLineHorizontal, { top: '22%' }]} />
-          <View style={[styles.mapLineHorizontal, { top: '43%' }]} />
-          <View style={[styles.mapLineHorizontal, { top: '64%' }]} />
-          <View style={[styles.mapLineVertical, { left: '22%' }]} />
-          <View style={[styles.mapLineVertical, { left: '48%' }]} />
-          <View style={[styles.mapLineVertical, { left: '74%' }]} />
-          <View style={styles.river} />
-          <Text style={[styles.mapLabel, { top: '11%', left: '31%' }]}>OLD TOWN</Text>
-          <Text style={[styles.mapLabel, { top: '39%', right: '13%' }]}>STREETERVILLE</Text>
-          <Text style={[styles.mapLabel, { bottom: '22%', left: '14%' }]}>RIVER WEST</Text>
-          <Text style={[styles.mapLabel, { bottom: '18%', right: '15%' }]}>GOLD COAST</Text>
-          <Text style={[styles.mapLabel, { bottom: '8%', left: '12%' }]}>RIVER NORTH</Text>
+        <NativeMap
+          ref={nativeMapRef}
+          userCoords={userCoords}
+          pubs={osmPubs}
+          onPubPress={setSelectedPub}
+          style={styles.webView}
+        />
 
-          {visibleVenues.map((venue) => (
-            <MapVenuePin
-              key={venue.id}
-              position={venue.mapPosition}
-              onPress={() => onOpenBuy(venue.id)}
-            />
-          ))}
+        {locationStatus === 'denied' && (
+          <View style={styles.mapOverlay}>
+            <Text style={styles.mapOverlayText}>Location access needed to find pubs nearby</Text>
+          </View>
+        )}
 
-          <AmbientPulse style={styles.userLocation} intensity={1.4}>
-            <View style={styles.userHalo}>
-              <View style={styles.userDot} />
-            </View>
-          </AmbientPulse>
-          <PressableScale accessibilityLabel="Locate me" style={styles.compass}>
-            <LocateFixed color={colors.text} size={22} strokeWidth={1.7} />
-          </PressableScale>
-        </LinearGradient>
+        <PressableScale accessibilityLabel="Re-centre map" onPress={recenter} style={styles.compass}>
+          <LocateFixed color={colors.text} size={22} strokeWidth={1.7} />
+        </PressableScale>
       </View>
 
-      {activeVenue ? (
-        <SectionCard>
-          <View style={styles.venueCard}>
-            <Image source={{ uri: activeVenue.imageUrl }} style={styles.venueImage} />
-            <View style={styles.venueCopy}>
-              <View style={styles.venueTitleRow}>
-                <Text style={styles.venueName} numberOfLines={1}>
-                  {activeVenue.name}
-                </Text>
-                <View style={styles.verifiedDot} />
-              </View>
-              <Text style={styles.venueMeta} numberOfLines={1}>
-                {activeVenue.distanceMiles.toFixed(1)} mi - {activeVenue.priceTier} - {activeVenue.area}
-              </Text>
-              <View style={styles.ratingRow}>
-                <Star color={colors.gold} size={17} fill={colors.gold} />
-                <Text style={styles.ratingText}>{activeVenue.rating.toFixed(1)}</Text>
-                <Text style={styles.reviewText}>({activeVenue.reviewCount})</Text>
-                <View style={styles.smallBadge}>
-                  <Text style={styles.smallBadgeText}>{activeVenue.tags[0]}</Text>
-                </View>
-              </View>
-            </View>
+      <View style={styles.nearbySection}>
+        <View style={styles.nearbyHeadingRow}>
+          <Text style={styles.nearbyHeading}>
+            {selectedFilter === 'top-rated' ? 'Top Rated Bars' : 'Nearby Bars'}
+          </Text>
+          {!pubsLoading && !pubsError && visiblePubs.length > 0 ? (
+            <Text style={styles.nearbyCount}>{visiblePubs.length}</Text>
+          ) : null}
+        </View>
+        {pubsLoading ? (
+          <View style={styles.nearbyState}>
+            <ActivityIndicator color={colors.gold} size="small" />
+            <Text style={styles.nearbyStateText}>Finding bars near you…</Text>
           </View>
-          <View style={styles.venueActions}>
-            <GoldButton label="Buy ahead" compact onPress={() => onOpenBuy(activeVenue.id)} />
-            <Text style={styles.pickupText}>Pickup in {activeVenue.pickupWindow}</Text>
+        ) : pubsError ? (
+          <View style={styles.nearbyState}>
+            <Beer color={colors.textMuted} size={22} strokeWidth={1.6} />
+            <Text style={styles.nearbyStateText}>Couldn't load bars — check connection</Text>
           </View>
-        </SectionCard>
-      ) : null}
+        ) : locationStatus === 'granted' && visiblePubs.length === 0 ? (
+          <View style={styles.nearbyState}>
+            <Beer color={colors.textMuted} size={22} strokeWidth={1.6} />
+            <Text style={styles.nearbyStateText}>No bars found nearby</Text>
+          </View>
+        ) : visiblePubs.length > 0 ? (
+          <View style={styles.pubList}>
+            {visiblePubs.slice(0, 10).map((pub) => {
+              const rating = ratings[pub.id];
+              const distText =
+                pub.distanceMiles < 0.1
+                  ? `${Math.round(pub.distanceMiles * 1760)} yds`
+                  : `${pub.distanceMiles.toFixed(1)} mi`;
+              return (
+                <PressableScale
+                  key={pub.id}
+                  onPress={() => setSelectedPub(pub)}
+                  accessibilityLabel={pub.name}
+                  pressedScale={0.98}
+                >
+                  <View style={styles.pubCard}>
+                    <View style={styles.pubIconWrap}>
+                      <Beer color={colors.gold} size={20} strokeWidth={2.2} />
+                    </View>
+                    <View style={styles.pubText}>
+                      <Text style={styles.pubName} numberOfLines={1}>{pub.name}</Text>
+                      <View style={styles.pubMetaRow}>
+                        <RatingStars
+                          average={rating?.average ?? 0}
+                          count={rating?.count ?? 0}
+                          size={13}
+                        />
+                        <Text style={styles.metaDot}>·</Text>
+                        <Navigation color={colors.gold} size={11} strokeWidth={2} />
+                        <Text style={styles.pubDist}>{distText}</Text>
+                      </View>
+                      {pub.address ? (
+                        <Text style={styles.pubAddr} numberOfLines={1}>{pub.address}</Text>
+                      ) : null}
+                    </View>
+                    <ChevronRight color={colors.textMuted} size={18} />
+                  </View>
+                </PressableScale>
+              );
+            })}
+          </View>
+        ) : null}
+      </View>
 
       <PressableScale accessibilityLabel="Open points promo" onPress={onOpenRedeem} style={styles.promoWrap}>
         <View style={styles.promo}>
@@ -199,27 +220,15 @@ export function ExploreScreen({
           <ChevronRight color={colors.textMuted} size={24} />
         </View>
       </PressableScale>
-    </View>
-  );
-}
 
-function MapVenuePin({
-  onPress,
-  position,
-}: {
-  onPress: () => void;
-  position: Venue['mapPosition'];
-}) {
-  return (
-    <AmbientPulse intensity={0.65} style={[styles.pinWrap, position]}>
-      <PressableScale accessibilityLabel="Open venue" onPress={onPress} pressedScale={0.9}>
-        <LinearGradient colors={[colors.goldBright, '#F2A900']} style={styles.pin}>
-          <View style={styles.pinInner}>
-            <Beer color={colors.text} size={15} fill={colors.text} strokeWidth={1.5} />
-          </View>
-        </LinearGradient>
-      </PressableScale>
-    </AmbientPulse>
+      <PubDetailModal
+        pub={selectedPub}
+        rating={selectedPub ? ratings[selectedPub.id] : undefined}
+        userRating={selectedPub ? userRatings[selectedPub.id] : undefined}
+        onSubmitReview={onSubmitReview}
+        onClose={() => setSelectedPub(null)}
+      />
+    </View>
   );
 }
 
@@ -251,9 +260,7 @@ const styles = StyleSheet.create({
     fontSize: 31,
     letterSpacing: 0,
   },
-  brandGold: {
-    color: colors.gold,
-  },
+  brandGold: { color: colors.gold },
   brandMeta: {
     marginTop: -2,
     color: colors.textSubtle,
@@ -305,9 +312,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  filterPillActive: {
-    backgroundColor: 'transparent',
-  },
+  filterPillActive: { backgroundColor: 'transparent' },
   filterSpark: {
     position: 'absolute',
     left: 10,
@@ -326,101 +331,34 @@ const styles = StyleSheet.create({
     fontFamily: font.medium,
   },
   mapWrap: {
-    marginHorizontal: 0,
     marginTop: 12,
     height: 292,
     borderRadius: radii.sm,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.055)',
     overflow: 'hidden',
-  },
-  mapBase: {
-    flex: 1,
     position: 'relative',
-    overflow: 'hidden',
   },
-  mapTint: {
+  webView: {
+    flex: 1,
+    backgroundColor: '#050607',
+  },
+  mapOverlay: {
     position: 'absolute',
     top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  },
-  mapLineHorizontal: {
-    position: 'absolute',
     left: 0,
     right: 0,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.052)',
-  },
-  mapLineVertical: {
-    position: 'absolute',
-    top: 0,
     bottom: 0,
-    width: 1,
-    backgroundColor: 'rgba(255,255,255,0.052)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(5,6,7,0.75)',
+    padding: 24,
   },
-  river: {
-    position: 'absolute',
-    left: '49%',
-    top: '-12%',
-    width: 52,
-    height: '128%',
-    borderRadius: 30,
-    backgroundColor: 'rgba(68,91,125,0.22)',
-    transform: [{ rotate: '7deg' }],
-  },
-  mapLabel: {
-    position: 'absolute',
-    color: 'rgba(255,255,255,0.48)',
-    fontSize: 11,
+  mapOverlayText: {
+    color: colors.textMuted,
     fontFamily: font.regular,
-    letterSpacing: 0,
-  },
-  pinWrap: {
-    position: 'absolute',
-    width: 37,
-    height: 44,
-    marginLeft: -18,
-    marginTop: -39,
-  },
-  pin: {
-    width: 35,
-    height: 43,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    borderBottomLeftRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    transform: [{ rotate: '-45deg' }],
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.35)',
-  },
-  pinInner: {
-    transform: [{ rotate: '45deg' }],
-  },
-  userLocation: {
-    position: 'absolute',
-    top: '48%',
-    left: '55%',
-  },
-  userHalo: {
-    width: 54,
-    height: 54,
-    marginTop: -27,
-    marginLeft: -27,
-    borderRadius: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(38,141,255,0.18)',
-  },
-  userDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.mapBlue,
-    borderWidth: 3,
-    borderColor: colors.text,
+    fontSize: 14,
+    textAlign: 'center',
   },
   compass: {
     position: 'absolute',
@@ -435,92 +373,88 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: 'rgba(12,13,14,0.88)',
   },
-  venueCard: {
-    flexDirection: 'row',
-    padding: 10,
-    gap: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: 'rgba(255,255,255,0.018)',
-  },
-  venueImage: {
-    width: 92,
-    height: 92,
-    borderRadius: radii.xs,
-    backgroundColor: colors.panelRaised,
-  },
-  venueCopy: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  venueTitleRow: {
+  nearbySection: { marginTop: 22 },
+  nearbyHeadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 8,
+    marginBottom: 12,
   },
-  venueName: {
-    flexShrink: 1,
-    color: colors.text,
+  nearbyHeading: {
+    color: colors.textSubtle,
     fontFamily: font.medium,
-    fontSize: 18,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
   },
-  verifiedDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.gold,
-  },
-  venueMeta: {
-    marginTop: 8,
-    color: colors.textMuted,
-    fontFamily: font.regular,
-    fontSize: 13,
-  },
-  ratingRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  ratingText: {
+  nearbyCount: {
     color: colors.gold,
     fontFamily: font.medium,
-    fontSize: 13,
+    fontSize: 11,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 9,
+    overflow: 'hidden',
+    backgroundColor: colors.goldSoft,
   },
-  reviewText: {
+  nearbyState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 18,
+    paddingHorizontal: 4,
+  },
+  nearbyStateText: {
     color: colors.textMuted,
     fontFamily: font.regular,
-    fontSize: 13,
+    fontSize: 14,
   },
-  smallBadge: {
-    marginLeft: 8,
-    paddingHorizontal: 8,
-    height: 22,
-    borderRadius: 6,
+  pubList: { gap: 8 },
+  pubCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 12,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.panelGlass,
+  },
+  pubIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.xs,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.goldSoft,
   },
-  smallBadgeText: {
-    color: colors.gold,
+  pubText: { flex: 1, gap: 4 },
+  pubName: {
+    color: colors.text,
     fontFamily: font.medium,
-    fontSize: 11,
+    fontSize: 15,
   },
-  venueActions: {
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+  pubMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 5,
   },
-  pickupText: {
-    color: colors.textMuted,
-    fontFamily: font.regular,
+  metaDot: {
+    color: colors.textSubtle,
     fontSize: 13,
   },
-  promoWrap: {
-    marginTop: 18,
+  pubAddr: {
+    color: colors.textMuted,
+    fontFamily: font.regular,
+    fontSize: 12,
   },
+  pubDist: {
+    color: colors.gold,
+    fontFamily: font.medium,
+    fontSize: 12,
+  },
+  promoWrap: { marginTop: 18 },
   promo: {
     minHeight: 72,
     borderRadius: radii.sm,
@@ -542,9 +476,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     backgroundColor: 'rgba(244,200,74,0.06)',
   },
-  promoCopy: {
-    flex: 1,
-  },
+  promoCopy: { flex: 1 },
   promoTitle: {
     color: colors.gold,
     fontFamily: font.medium,

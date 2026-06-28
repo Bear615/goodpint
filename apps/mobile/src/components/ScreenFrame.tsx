@@ -2,7 +2,8 @@ import type { PropsWithChildren, ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { PanResponder, Platform, SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { PanResponder, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { colors } from '../theme';
 
 interface ScreenFrameProps extends PropsWithChildren {

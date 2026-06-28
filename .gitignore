@@ -12,6 +12,10 @@ expo-env.d.ts
 # generated builds
 packages/api/dist/
 
+# local sqlite database
+packages/api/goodpint.db
+packages/api/goodpint.db-*
+
 # local runtime output
 .codex/
 *.log

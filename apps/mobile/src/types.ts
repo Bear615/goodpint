@@ -87,6 +87,22 @@ export interface MemberProfile {
   homeArea: string;
 }
 
+export interface OsmPub {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  address: string;
+  distanceMiles: number;
+}
+
+export interface PubRating {
+  average: number;
+  count: number;
+}
+
+export type RatingMap = Record<string, PubRating>;
+
 export interface CartItem {
   drinkId: string;
   quantity: number;

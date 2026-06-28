@@ -3,6 +3,7 @@ import cors from 'cors';
 import express from 'express';
 import { z } from 'zod';
 import { db, timestampLabel } from './data';
+import { addReview, getAllRatings, getRating, getUserRatings } from './reviews';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -31,6 +32,13 @@ const topUpSchema = z.object({
 
 const checkInSchema = z.object({
   venueId: z.string().min(1),
+});
+
+const reviewSchema = z.object({
+  pubId: z.string().min(1),
+  userId: z.string().min(1),
+  rating: z.number().min(0.5).max(5).refine((v) => Math.round(v * 2) === v * 2, 'Must be a multiple of 0.5'),
+  pubName: z.string().min(1).max(200).optional(),
 });
 
 app.get('/health', (_request, response) => {
@@ -179,6 +187,41 @@ app.post('/api/check-ins', (request, response) => {
   db.points += pointsEarned;
 
   response.status(201).json({ points: db.points, pointsEarned, venue });
+});
+
+// All pub ratings as a map keyed by pub id — used to annotate the nearby list.
+app.get('/api/reviews/ratings', (_request, response) => {
+  response.json(getAllRatings());
+});
+
+// This user's ratings — keyed by pub id, value is their star count.
+app.get('/api/reviews/user-ratings', (request, response) => {
+  const userId = request.query['userId'];
+  if (typeof userId !== 'string' || !userId) {
+    response.status(400).json({ error: 'userId query param required' });
+    return;
+  }
+  response.json(getUserRatings(userId));
+});
+
+// Single pub rating summary.
+app.get('/api/reviews/:pubId', (request, response) => {
+  response.json(getRating(request.params.pubId));
+});
+
+// Leave a review for a pub; returns the recomputed average + count.
+app.post('/api/reviews', (request, response) => {
+  const parsed = reviewSchema.safeParse(request.body);
+
+  if (!parsed.success) {
+    response.status(400).json({ error: 'Invalid review payload', details: parsed.error.flatten() });
+    return;
+  }
+
+  const { summary, isNew } = addReview(parsed.data.pubId, parsed.data.userId, parsed.data.rating, parsed.data.pubName);
+  if (isNew) db.points += 25; // points only on first review
+
+  response.status(201).json({ pubId: parsed.data.pubId, ...summary, points: db.points });
 });
 
 app.use((_request, response) => {
