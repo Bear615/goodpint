@@ -16,24 +16,23 @@ interface RedeemScreenProps {
   onBack: () => void;
 }
 
-function stableCode(id: string): string {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (Math.imul(31, h) + id.charCodeAt(i)) >>> 0;
-  return String(h % 1_000_000).padStart(6, '0');
+function formatExpiry(iso: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export function RedeemScreen({ points, reward, secondsRemaining, onBack }: RedeemScreenProps) {
+export function RedeemScreen({ points, reward, voucher, secondsRemaining, onBack }: RedeemScreenProps) {
   const [activeTab, setActiveTab] = useState<'scan' | 'code'>('scan');
 
   const minutes = Math.floor(secondsRemaining / 60).toString().padStart(2, '0');
   const seconds = (secondsRemaining % 60).toString().padStart(2, '0');
-  const payload = JSON.stringify({
-    type: 'goodpint.reward',
-    rewardId: reward?.id ?? 'free-drink',
-    points,
-    issuedAt: new Date().toISOString().slice(0, 10),
-  });
-  const code = stableCode(reward?.id ?? 'free-drink');
+  const code = voucher?.code ?? null;
+  const payload = code
+    ? JSON.stringify({ type: 'goodpint.voucher', code })
+    : null;
+  const expiryLabel = formatExpiry(voucher?.expiresAt ?? null);
 
   return (
     <View>
@@ -57,16 +56,21 @@ export function RedeemScreen({ points, reward, secondsRemaining, onBack }: Redee
       <Text style={styles.instruction}>
         {activeTab === 'scan' ? 'Show this QR to redeem' : 'Read this code to the bartender'}
       </Text>
-      <Text style={styles.rewardName}>{reward?.title ?? 'Free Drink'}</Text>
+      <Text style={styles.rewardName}>{voucher?.title ?? reward?.title ?? 'Free Drink'}</Text>
 
-      {activeTab === 'scan' ? (
+      {!code || !payload ? (
+        <View style={styles.codeWrap}>
+          <Text style={styles.fallback}>No active voucher</Text>
+          <Text style={styles.codeHint}>Redeem a reward to get a voucher code</Text>
+        </View>
+      ) : activeTab === 'scan' ? (
         <View style={styles.qrWrap}>
           <QRCodeGrid value={payload} />
         </View>
       ) : (
         <View style={styles.codeWrap}>
-          <Text style={styles.code}>{code.slice(0, 3)} {code.slice(3)}</Text>
-          <Text style={styles.codeHint}>Give this 6-digit code to your bartender</Text>
+          <Text style={styles.code}>{code}</Text>
+          <Text style={styles.codeHint}>Give this code to your bartender</Text>
         </View>
       )}
 
@@ -77,7 +81,9 @@ export function RedeemScreen({ points, reward, secondsRemaining, onBack }: Redee
 
       <View style={styles.expiryRow}>
         <Clock3 color={colors.textMuted} size={17} />
-        <Text style={styles.expiry}>Expires in {minutes}:{seconds}</Text>
+        <Text style={styles.expiry}>
+          {expiryLabel ? `Valid until ${expiryLabel}` : `Expires in ${minutes}:${seconds}`}
+        </Text>
       </View>
 
       <SectionCard>
@@ -85,7 +91,7 @@ export function RedeemScreen({ points, reward, secondsRemaining, onBack }: Redee
           <Text style={styles.howTitle}>How it works</Text>
           {(activeTab === 'scan'
             ? ['Show this QR code to the bartender', 'They scan it to redeem your reward', 'Enjoy']
-            : ['Read the 6-digit code to the bartender', 'They enter it to redeem your reward', 'Enjoy']
+            : ['Read the code to the bartender', 'They enter it to redeem your reward', 'Enjoy']
           ).map((copy, index) => (
             <View key={copy} style={styles.howRow}>
               <View style={styles.stepCircle}>
@@ -173,8 +179,13 @@ const styles = StyleSheet.create({
   code: {
     color: colors.gold,
     fontFamily: font.bold,
-    fontSize: 48,
-    letterSpacing: 6,
+    fontSize: 40,
+    letterSpacing: 4,
+  },
+  fallback: {
+    color: colors.text,
+    fontFamily: font.medium,
+    fontSize: 22,
   },
   codeHint: {
     marginTop: 14,
