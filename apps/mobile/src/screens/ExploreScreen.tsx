@@ -218,14 +218,14 @@ export function ExploreScreen({
         ) : null}
       </View>
 
-      <PressableScale accessibilityLabel="Open points promo" onPress={onOpenRedeem} style={styles.promoWrap}>
+      <PressableScale accessibilityLabel="Open rewards" onPress={onOpenRedeem} style={styles.promoWrap}>
         <View style={styles.promo}>
           <View style={styles.promoIcon}>
             <Zap color={colors.gold} size={24} fill={colors.gold} />
           </View>
           <View style={styles.promoCopy}>
-            <Text style={styles.promoTitle}>2X POINTS TONIGHT</Text>
-            <Text style={styles.promoSub}>At select venues</Text>
+            <Text style={styles.promoTitle}>POINTS & REWARDS</Text>
+            <Text style={styles.promoSub}>Earn points and redeem rewards</Text>
           </View>
           <ChevronRight color={colors.textMuted} size={24} />
         </View>
