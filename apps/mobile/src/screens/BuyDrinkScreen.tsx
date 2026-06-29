@@ -1,7 +1,7 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Minus, Plus, Trash2, WalletCards } from 'lucide-react-native';
-import { colors, font, formatCurrency, radii } from '../theme';
+import { ArrowLeft, Minus, Plus, Star, Trash2, WalletCards } from 'lucide-react-native';
+import { colors, font, formatCurrency, formatPoints, radii } from '../theme';
 import type { CartItem, Drink, Venue } from '../types';
 import { GoldButton } from '../components/GoldButton';
 import { PressableScale } from '../components/Motion';
@@ -28,6 +28,10 @@ export function BuyDrinkScreen({
 }: BuyDrinkScreenProps) {
   const quantityFor = (drinkId: string) => cart.find((item) => item.drinkId === drinkId)?.quantity ?? 0;
   const orderedDrinks = drinks.filter((drink) => quantityFor(drink.id) > 0);
+  const pointsEarned = drinks.reduce(
+    (sum, drink) => sum + drink.points * quantityFor(drink.id),
+    0,
+  );
 
   return (
     <View>
@@ -45,9 +49,10 @@ export function BuyDrinkScreen({
 
       <View style={styles.divider} />
 
-      <Text style={styles.sectionTitle}>Popular</Text>
-      <SectionCard>
-        {drinks.map((drink, index) => {
+      <Text style={styles.sectionTitle}>Drinks</Text>
+      {drinks.length > 0 ? (
+        <SectionCard>
+          {drinks.map((drink, index) => {
           const quantity = quantityFor(drink.id);
           return (
             <LinearGradient
@@ -58,7 +63,9 @@ export function BuyDrinkScreen({
               <Image source={{ uri: drink.imageUrl }} style={styles.drinkImage} />
               <View style={styles.drinkCopy}>
                 <Text style={styles.drinkName}>{drink.name}</Text>
-                <Text style={styles.drinkPrice}>{formatCurrency(drink.price)}</Text>
+                <Text style={styles.drinkPrice}>
+                  {formatCurrency(drink.price)} · {formatPoints(drink.points)} pts
+                </Text>
               </View>
               <View style={styles.stepper}>
                 <PressableScale
@@ -82,8 +89,11 @@ export function BuyDrinkScreen({
               </View>
             </LinearGradient>
           );
-        })}
-      </SectionCard>
+          })}
+        </SectionCard>
+      ) : (
+        <Text style={styles.emptyOrder}>No drinks available right now.</Text>
+      )}
 
       <View style={styles.divider} />
 
@@ -104,6 +114,15 @@ export function BuyDrinkScreen({
         ))
       ) : (
         <Text style={styles.emptyOrder}>Add a drink to continue.</Text>
+      )}
+
+      {pointsEarned > 0 && (
+        <View style={styles.earnRow}>
+          <Star color={colors.gold} fill={colors.gold} size={16} />
+          <Text style={styles.earnText}>
+            You'll earn {formatPoints(pointsEarned)} points on this order
+          </Text>
+        </View>
       )}
 
       <View style={styles.totalRow}>
@@ -257,6 +276,17 @@ const styles = StyleSheet.create({
     fontFamily: font.regular,
     fontSize: 14,
     paddingVertical: 16,
+  },
+  earnRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  earnText: {
+    color: colors.gold,
+    fontFamily: font.medium,
+    fontSize: 13,
   },
   totalRow: {
     marginTop: 10,
