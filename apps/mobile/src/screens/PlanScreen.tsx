@@ -24,7 +24,7 @@ interface PlanScreenProps {
   onOpenBuy: (venueId: string, pubName: string) => void;
 }
 
-const guestInitials = ['MA', 'JB', 'RK', 'ST'];
+const MAX_AVATARS = 4;
 
 function splitStopTime(time: string) {
   const [dateLabel = '', clockLabel = time] = time.split(' - ');
@@ -60,6 +60,40 @@ export function PlanScreen({ trips, venues, onInviteFriends, onAddStop, onOpenBu
     .map((stop) => venueForStop(stop, venues)?.area)
     .filter(Boolean)
     .join(' / ');
+  const guestCount = trip?.guests ?? 0;
+  const avatarCount = Math.min(guestCount, MAX_AVATARS);
+  const avatarSlots = Array.from({ length: avatarCount }, (_, index) => index);
+
+  if (!trip) {
+    return (
+      <View>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.eyebrow}>Plan</Text>
+            <Text style={styles.title}>Weekend Plan</Text>
+          </View>
+          <PressableScale accessibilityLabel="Invite group" onPress={onInviteFriends} style={styles.headerButton}>
+            <UsersRound color={colors.gold} size={22} strokeWidth={2} />
+          </PressableScale>
+        </View>
+
+        <SectionCard style={styles.emptyCard}>
+          <View style={styles.emptyIcon}>
+            <MapPinned color={colors.gold} size={26} strokeWidth={2} />
+          </View>
+          <Text style={styles.emptyTitle}>No trips yet</Text>
+          <Text style={styles.emptyHint}>Plan your first GoodPint night out and invite your group.</Text>
+          <View style={styles.emptyCommandRow}>
+            <PressableScale accessibilityLabel="Add stop" style={styles.addStop} pressedScale={0.975} onPress={onAddStop}>
+              <Plus color={colors.gold} size={21} strokeWidth={2.2} />
+              <Text style={styles.addStopText}>Add Stop</Text>
+            </PressableScale>
+            <GoldButton label="Invite" compact onPress={onInviteFriends} style={styles.inviteButton} />
+          </View>
+        </SectionCard>
+      </View>
+    );
+  }
 
   return (
     <View>
@@ -131,13 +165,15 @@ export function PlanScreen({ trips, venues, onInviteFriends, onAddStop, onOpenBu
       {activeTab === 'itinerary' && (
         <>
           <View style={styles.peopleRow}>
-            <View style={styles.avatarStack}>
-              {guestInitials.map((initials, index) => (
-                <View key={initials} style={[styles.avatar, { marginLeft: index === 0 ? 0 : -8 }]}>
-                  <Text style={styles.avatarText}>{initials}</Text>
-                </View>
-              ))}
-            </View>
+            {avatarSlots.length > 0 ? (
+              <View style={styles.avatarStack}>
+                {avatarSlots.map((slot, index) => (
+                  <View key={slot} style={[styles.avatar, { marginLeft: index === 0 ? 0 : -8 }]}>
+                    <UsersRound color={colors.textMuted} size={14} strokeWidth={2} />
+                  </View>
+                ))}
+              </View>
+            ) : null}
             <Text style={styles.peopleText} numberOfLines={1}>
               {routeAreas || 'Choose stops'}
             </Text>
@@ -216,17 +252,21 @@ export function PlanScreen({ trips, venues, onInviteFriends, onAddStop, onOpenBu
 
       {activeTab === 'group' && (
         <View style={styles.groupTab}>
-          <Text style={styles.groupHeading}>{trip?.guests ?? 0} people going</Text>
-          <View style={styles.guestList}>
-            {guestInitials.map((initials) => (
-              <View key={initials} style={styles.guestRow}>
-                <View style={styles.guestAvatar}>
-                  <Text style={styles.guestAvatarText}>{initials}</Text>
+          <Text style={styles.groupHeading}>{guestCount} people going</Text>
+          {guestCount > 0 ? (
+            <View style={styles.guestList}>
+              {Array.from({ length: guestCount }, (_, index) => (
+                <View key={index} style={styles.guestRow}>
+                  <View style={styles.guestAvatar}>
+                    <UsersRound color={colors.textMuted} size={18} strokeWidth={2} />
+                  </View>
+                  <Text style={styles.guestName}>Guest {index + 1}</Text>
                 </View>
-                <Text style={styles.guestName}>Guest {initials}</Text>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.groupEmpty}>No one has joined yet — invite your friends to get started.</Text>
+          )}
           <GoldButton label="Invite Friends" onPress={onInviteFriends} style={styles.groupInvite} />
         </View>
       )}
@@ -305,7 +345,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panelGlass,
     borderWidth: 1, borderColor: colors.border,
   },
-  avatarText: { color: colors.text, fontFamily: font.medium, fontSize: 10 },
   peopleText: { flex: 1, color: colors.textMuted, fontFamily: font.regular, fontSize: 13 },
   commandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   addStop: {
@@ -353,9 +392,22 @@ const styles = StyleSheet.create({
   stopDetailRow: { marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 5 },
   detailText: { flexShrink: 1, color: colors.textSubtle, fontFamily: font.regular, fontSize: 11 },
   ratingText: { color: colors.gold, fontFamily: font.medium, fontSize: 11 },
+  // empty state
+  emptyCard: { padding: 24, alignItems: 'center', gap: 10 },
+  emptyIcon: {
+    width: 56, height: 56, borderRadius: 28,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: colors.borderStrong,
+    backgroundColor: 'rgba(244,200,74,0.06)',
+    marginBottom: 4,
+  },
+  emptyTitle: { color: colors.text, fontFamily: font.medium, fontSize: 18 },
+  emptyHint: { color: colors.textMuted, fontFamily: font.regular, fontSize: 13, textAlign: 'center' },
+  emptyCommandRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' },
   // group tab
   groupTab: { paddingTop: 20, gap: 16 },
   groupHeading: { color: colors.text, fontFamily: font.medium, fontSize: 16 },
+  groupEmpty: { color: colors.textMuted, fontFamily: font.regular, fontSize: 13 },
   guestList: { gap: 12 },
   guestRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   guestAvatar: {
@@ -363,7 +415,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: colors.panelGlass, borderWidth: 1, borderColor: colors.border,
   },
-  guestAvatarText: { color: colors.text, fontFamily: font.medium, fontSize: 13 },
   guestName: { color: colors.textMuted, fontFamily: font.regular, fontSize: 14 },
   groupInvite: { marginTop: 8 },
   // notes tab
