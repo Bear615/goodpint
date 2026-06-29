@@ -1,5 +1,5 @@
 import { Alert, StyleSheet, Text, View } from 'react-native';
-import { ChevronRight, Gift, History, Plus, Star, WalletCards } from 'lucide-react-native';
+import { ChevronRight, Gift, History, Plus, Star, Ticket, WalletCards } from 'lucide-react-native';
 import React from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, font, formatCurrency, radii } from '../theme';
@@ -16,9 +16,10 @@ interface WalletScreenProps {
   onTopUp: () => void;
 }
 
-export function WalletScreen({ wallet, passes, transactions, onTopUp }: WalletScreenProps) {
+export function WalletScreen({ wallet, passes, vouchers = [], transactions, onTopUp }: WalletScreenProps) {
   const [showAll, setShowAll] = React.useState(false);
   const visibleTx = showAll ? transactions : transactions.slice(0, 3);
+  const hasCard = wallet.cardLast4.length > 0;
   return (
     <View>
       <Text style={styles.title}>Wallet</Text>
@@ -26,11 +27,11 @@ export function WalletScreen({ wallet, passes, transactions, onTopUp }: WalletSc
       <LinearGradient colors={['rgba(255,255,255,0.06)', 'rgba(244,200,74,0.065)']} style={styles.walletCard}>
         <View style={styles.cardTop}>
           <Text style={styles.cardTitle}>GoodPint Card</Text>
-          <Text style={styles.cardDigits}>.... {wallet.cardLast4}</Text>
+          <Text style={styles.cardDigits}>{hasCard ? `.... ${wallet.cardLast4}` : '•••• ••••'}</Text>
         </View>
         <Text style={styles.balance}>{formatCurrency(wallet.balance)}</Text>
         <View style={styles.cardBottom}>
-          <Text style={styles.tapText}>Tap to add funds</Text>
+          <Text style={styles.tapText}>{hasCard ? 'Tap to add funds' : 'Add a card to get started'}</Text>
           <PressableScale accessibilityLabel="Add funds" onPress={onTopUp} style={styles.addButton} pressedScale={0.9}>
             <Plus color="#1A1200" size={25} strokeWidth={2.6} />
           </PressableScale>
@@ -53,6 +54,29 @@ export function WalletScreen({ wallet, passes, transactions, onTopUp }: WalletSc
             </View>
           </SectionCard>
         ))}
+        {vouchers.map((voucher) => (
+          <SectionCard key={voucher.id}>
+            <View style={styles.passRow}>
+              <View style={styles.passIcon}>
+                <Ticket color={colors.gold} size={23} />
+              </View>
+              <View style={styles.passCopy}>
+                <Text style={styles.passTitle}>{voucher.title}</Text>
+                <Text style={styles.passSubtitle}>Code {voucher.code}</Text>
+              </View>
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusText}>{voucher.status}</Text>
+              </View>
+            </View>
+          </SectionCard>
+        ))}
+        {passes.length === 0 && vouchers.length === 0 ? (
+          <SectionCard>
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No vouchers yet — redeem points in Points.</Text>
+            </View>
+          </SectionCard>
+        ) : null}
       </View>
 
       <SectionCard>
@@ -194,6 +218,17 @@ const styles = StyleSheet.create({
     color: colors.gold,
     fontFamily: font.medium,
     fontSize: 12,
+    textTransform: 'capitalize',
+  },
+  emptyState: {
+    minHeight: 64,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+  },
+  emptyText: {
+    color: colors.textMuted,
+    fontFamily: font.regular,
+    fontSize: 14,
   },
   menuRow: {
     minHeight: 64,
