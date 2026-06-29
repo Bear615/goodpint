@@ -21,9 +21,25 @@ const ruleIcons = [Star, Beer, UserPlus, MessageSquareText];
 
 export function PointsScreen({ points, rewards, earningRules, tiers, onOpenRedeem, onOpenHistory }: PointsScreenProps) {
   const progressValue = useRef(new Animated.Value(0)).current;
-  const goldTier = tiers.find((tier) => tier.id === 'gold') ?? tiers[tiers.length - 1];
-  const nextTierPoints = Math.max(goldTier.points - points, 0);
-  const progress = Math.min((points / goldTier.points) * 100, 100);
+
+  // Sort tiers ascending by threshold so current/next logic doesn't depend on prop order.
+  const sortedTiers = [...tiers].sort((a, b) => a.points - b.points);
+  // Current tier: highest tier whose threshold the user has reached.
+  const currentTier = [...sortedTiers].reverse().find((tier) => points >= tier.points) ?? null;
+  // Next tier: lowest tier whose threshold the user has not yet reached.
+  const nextTier = sortedTiers.find((tier) => tier.points > points) ?? null;
+  const atMaxTier = sortedTiers.length > 0 && nextTier === null;
+  const topTier = sortedTiers.length > 0 ? sortedTiers[sortedTiers.length - 1] : null;
+
+  const nextTierPoints = nextTier ? Math.max(nextTier.points - points, 0) : 0;
+  // Progress toward the next tier, measured from the current tier's threshold.
+  const progress = (() => {
+    if (!nextTier) return 100;
+    const floor = currentTier?.points ?? 0;
+    const span = nextTier.points - floor;
+    if (span <= 0) return 100;
+    return Math.max(0, Math.min(((points - floor) / span) * 100, 100));
+  })();
   const progressWidth = progressValue.interpolate({
     inputRange: [0, 100],
     outputRange: ['0%', '100%'],
@@ -64,15 +80,21 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onOpenRedee
         </View>
 
         <View style={styles.progressMeta}>
-          <Text style={styles.progressText}>{nextTierPoints} pts until Gold Tier</Text>
-          <Text style={styles.progressText}>{formatPoints(goldTier.points)}</Text>
+          <Text style={styles.progressText}>
+            {atMaxTier
+              ? `Max tier reached${currentTier ? ` — ${currentTier.title}` : ''}`
+              : nextTier
+                ? `${formatPoints(nextTierPoints)} pts until ${nextTier.title}`
+                : 'Start earning to reach your first tier'}
+          </Text>
+          {nextTier ? <Text style={styles.progressText}>{formatPoints(nextTier.points)}</Text> : null}
         </View>
         <View style={styles.progressTrack}>
           <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
         </View>
 
         <View style={styles.tierRow}>
-          {tiers.map((tier) => {
+          {sortedTiers.map((tier) => {
             const active = points >= tier.points;
             return (
               <View key={tier.id} style={[styles.tierItem, active && styles.tierItemActive]}>
@@ -134,7 +156,7 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onOpenRedee
             <Gift color={colors.gold} size={24} strokeWidth={2.4} />
           </View>
           <View style={styles.goldBoostCopy}>
-            <Text style={styles.goldBoostTitle}>Gold unlocks richer rewards</Text>
+            <Text style={styles.goldBoostTitle}>{topTier ? `${topTier.title} unlocks richer rewards` : 'Top tier unlocks richer rewards'}</Text>
             <Text style={styles.goldBoostText}>Partner upgrades, early event access, and premium happy hour multipliers.</Text>
           </View>
         </View>
