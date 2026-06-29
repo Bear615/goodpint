@@ -1,7 +1,8 @@
 import { Alert, Image, StyleSheet, Text, View } from 'react-native';
-import { Bell, ChevronRight, MapPin, ShieldCheck, Star, UserRound } from 'lucide-react-native';
+import { Bell, ChevronRight, LogOut, MapPin, ShieldCheck, Star, UserRound } from 'lucide-react-native';
 import { colors, font, formatCurrency, formatPoints, radii } from '../theme';
 import type { MemberProfile, Venue, WalletState } from '../types';
+import { useAuth } from '../context/AuthContext';
 import { PressableScale } from '../components/Motion';
 import { SectionCard } from '../components/SectionCard';
 
@@ -12,7 +13,26 @@ interface ProfileScreenProps {
   favoriteVenue?: Venue;
 }
 
+const PLACEHOLDER = '—';
+
+function valueOrPlaceholder(value: string | undefined | null) {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : PLACEHOLDER;
+}
+
 export function ProfileScreen({ profile, points, wallet, favoriteVenue }: ProfileScreenProps) {
+  const { signOut } = useAuth();
+
+  const hasAvatar = Boolean(profile.avatarUrl && profile.avatarUrl.trim().length > 0);
+  const homeZone = valueOrPlaceholder(favoriteVenue?.area ?? profile.homeArea);
+
+  function handleSignOut() {
+    Alert.alert('Sign out', 'Sign out of GoodPint?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => { void signOut(); } },
+    ]);
+  }
+
   return (
     <View>
       <View style={styles.header}>
@@ -24,11 +44,17 @@ export function ProfileScreen({ profile, points, wallet, favoriteVenue }: Profil
 
       <SectionCard>
         <View style={styles.profileCard}>
-          <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
+          {hasAvatar ? (
+            <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <UserRound color={colors.textMuted} size={30} />
+            </View>
+          )}
           <View style={styles.profileCopy}>
-            <Text style={styles.name}>{profile.name}</Text>
-            <Text style={styles.handle}>{profile.handle}</Text>
-            <Text style={styles.joined}>{profile.joinedLabel}</Text>
+            <Text style={styles.name}>{valueOrPlaceholder(profile.name)}</Text>
+            <Text style={styles.handle}>{valueOrPlaceholder(profile.handle)}</Text>
+            <Text style={styles.joined}>{valueOrPlaceholder(profile.joinedLabel)}</Text>
           </View>
           <ShieldCheck color={colors.gold} size={29} fill={colors.gold} />
         </View>
@@ -42,7 +68,7 @@ export function ProfileScreen({ profile, points, wallet, favoriteVenue }: Profil
         </View>
         <View style={styles.statCell}>
           <MapPin color={colors.gold} size={22} />
-          <Text style={styles.statValue}>{favoriteVenue?.area ?? profile.homeArea}</Text>
+          <Text style={styles.statValue}>{homeZone}</Text>
           <Text style={styles.statLabel}>Home zone</Text>
         </View>
         <View style={styles.statCell}>
@@ -56,13 +82,18 @@ export function ProfileScreen({ profile, points, wallet, favoriteVenue }: Profil
       <SectionCard>
         <View style={styles.preferenceRow}>
           <Text style={styles.preferenceLabel}>Usual spot</Text>
-          <Text style={styles.preferenceValue}>{favoriteVenue?.name ?? 'The Pour House'}</Text>
+          <Text style={styles.preferenceValue}>{valueOrPlaceholder(favoriteVenue?.name)}</Text>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.preferenceRow}>
+          <Text style={styles.preferenceLabel}>Favourite style</Text>
+          <Text style={styles.preferenceValue}>{valueOrPlaceholder(profile.favoriteStyle)}</Text>
         </View>
       </SectionCard>
 
       <Text style={styles.sectionTitle}>Account</Text>
       <SectionCard>
-        {['Saved venues', 'Notification settings', 'Help and support'].map((item, index) => (
+        {['Saved venues', 'Notification settings', 'Help and support'].map((item) => (
           <View key={item}>
             <PressableScale onPress={() => Alert.alert(item, 'Coming soon.')}>
               <View style={styles.menuRow}>
@@ -70,9 +101,15 @@ export function ProfileScreen({ profile, points, wallet, favoriteVenue }: Profil
                 <ChevronRight color={colors.textMuted} size={21} />
               </View>
             </PressableScale>
-            {index < 2 ? <View style={styles.divider} /> : null}
+            <View style={styles.divider} />
           </View>
         ))}
+        <PressableScale accessibilityLabel="Sign out" onPress={handleSignOut}>
+          <View style={styles.menuRow}>
+            <Text style={[styles.menuText, styles.signOutText]}>Sign out</Text>
+            <LogOut color={colors.danger} size={20} />
+          </View>
+        </PressableScale>
       </SectionCard>
     </View>
   );
@@ -111,6 +148,10 @@ const styles = StyleSheet.create({
     height: 68,
     borderRadius: 34,
     backgroundColor: colors.panelRaised,
+  },
+  avatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   profileCopy: {
     flex: 1,
@@ -203,5 +244,8 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontFamily: font.regular,
     fontSize: 15,
+  },
+  signOutText: {
+    color: colors.danger,
   },
 });
