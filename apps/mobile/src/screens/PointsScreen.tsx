@@ -14,11 +14,12 @@ interface PointsScreenProps {
   earningRules: EarningRule[];
   tiers: Tier[];
   onOpenRedeem: (rewardId: string) => void;
+  onOpenHistory: () => void;
 }
 
 const ruleIcons = [Star, Beer, UserPlus, MessageSquareText];
 
-export function PointsScreen({ points, rewards, earningRules, tiers, onOpenRedeem }: PointsScreenProps) {
+export function PointsScreen({ points, rewards, earningRules, tiers, onOpenRedeem, onOpenHistory }: PointsScreenProps) {
   const progressValue = useRef(new Animated.Value(0)).current;
   const goldTier = tiers.find((tier) => tier.id === 'gold') ?? tiers[tiers.length - 1];
   const nextTierPoints = Math.max(goldTier.points - points, 0);
@@ -41,7 +42,9 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onOpenRedee
     <View>
       <View style={styles.headerRow}>
         <Text style={styles.title}>Your Points</Text>
-        <Text style={styles.history}>History</Text>
+        <PressableScale accessibilityLabel="View history" onPress={onOpenHistory}>
+          <Text style={styles.history}>History</Text>
+        </PressableScale>
       </View>
 
       <LinearGradient

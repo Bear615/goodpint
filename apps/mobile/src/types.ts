@@ -103,12 +103,43 @@ export interface PubRating {
 
 export type RatingMap = Record<string, PubRating>;
 
+export interface PubReview {
+  id: string;
+  userId: string | null;
+  pubName: string | null;
+  rating: number;
+  note: string | null;
+  createdAt: string;
+}
+
 export interface CartItem {
   drinkId: string;
   quantity: number;
 }
 
+// The signed-in account. Extends the display profile with identity fields.
+export interface User extends MemberProfile {
+  id: string;
+  email: string;
+}
+
+export type VoucherStatus = 'active' | 'redeemed' | 'expired';
+
+// A redeemed reward the user can present at a pub. The `code` is what staff scan/enter.
+export interface Voucher {
+  id: string;
+  rewardId: string;
+  title: string;
+  code: string;
+  pointsSpent: number;
+  status: VoucherStatus;
+  createdAt: string;
+  expiresAt: string | null;
+  redeemedAt: string | null;
+}
+
 export interface AppStatePayload {
+  user: { id: string; email: string };
   points: number;
   wallet: WalletState;
   venues: Venue[];
@@ -119,5 +150,6 @@ export interface AppStatePayload {
   passes: Pass[];
   transactions: Transaction[];
   trips: Trip[];
+  vouchers: Voucher[];
   profile: MemberProfile;
 }

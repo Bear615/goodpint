@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
-import type { AppStatePayload, CartItem, PubRating, RatingMap } from '../types';
+import type { AppStatePayload, CartItem, PubRating, PubReview, RatingMap, User, Voucher } from '../types';
+import { getToken } from '../utils/authToken';
 
 const runtime = globalThis as typeof globalThis & {
   process?: { env?: Record<string, string | undefined> };
@@ -13,43 +14,96 @@ const defaultHost = Platform.select({
 export const API_BASE_URL =
   runtime.process?.env?.EXPO_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? defaultHost ?? 'http://localhost:4000';
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-  });
+// Thrown for non-2xx responses so callers can branch on status (e.g. 401).
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit & { auth?: boolean }): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+
+  // Attach the bearer token unless the caller explicitly opts out.
+  if (init?.auth !== false) {
+    const token = await getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `GoodPint API error ${response.status}`);
+    let message = `GoodPint API error ${response.status}`;
+    try {
+      const body = await response.json();
+      if (body?.error) message = body.error;
+    } catch {
+      // Non-JSON error body — keep the default message.
+    }
+    throw new ApiError(response.status, message);
   }
 
   return (await response.json()) as T;
 }
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+export async function signup(payload: { email: string; password: string; name: string }) {
+  return request<{ token: string; user: User }>('/api/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    auth: false,
+  });
+}
+
+export async function login(payload: { email: string; password: string }) {
+  return request<{ token: string; user: User }>('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    auth: false,
+  });
+}
+
+export async function logout() {
+  return request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' });
+}
+
+export async function getMe() {
+  return request<{ user: User }>('/api/auth/me');
+}
+
+// ---------------------------------------------------------------------------
+// App state + actions (all authenticated)
+// ---------------------------------------------------------------------------
 
 export async function getAppState() {
   return request<AppStatePayload>('/api/app-state');
 }
 
 export async function createOrder(payload: { venueId: string; items: CartItem[] }) {
-  return request<{ orderId: string; pointsEarned: number; walletBalance: number }>('/api/orders', {
+  return request<{ orderId: string; pointsEarned: number; points: number; walletBalance: number }>('/api/orders', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
-export async function redeemReward(payload: { rewardId: string; points: number }) {
-  return request<{ redemptionId: string; expiresAt: string }>('/api/redeem', {
+export async function redeemReward(payload: { rewardId: string }) {
+  return request<{ redemptionId: string; voucher: Voucher; points: number; expiresAt: string | null }>('/api/redeem', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
 export async function topUpWallet(payload: { amount: number }) {
-  return request<{ balance: number }>('/api/wallet/top-up', {
+  return request<{ balance: number; points: number }>('/api/wallet/top-up', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -62,15 +116,27 @@ export async function checkIn(payload: { venueId: string }) {
   });
 }
 
+export async function getVouchers() {
+  return request<Voucher[]>('/api/vouchers');
+}
+
+// ---------------------------------------------------------------------------
+// Reviews (read endpoints are public; submitting requires auth)
+// ---------------------------------------------------------------------------
+
 export async function getRatings() {
-  return request<RatingMap>('/api/reviews/ratings');
+  return request<RatingMap>('/api/reviews/ratings', { auth: false });
 }
 
 export async function getUserRatings(userId: string) {
-  return request<Record<string, number>>(`/api/reviews/user-ratings?userId=${encodeURIComponent(userId)}`);
+  return request<Record<string, number>>(`/api/reviews/user-ratings?userId=${encodeURIComponent(userId)}`, { auth: false });
 }
 
-export async function submitReview(payload: { pubId: string; userId: string; rating: number; pubName?: string }) {
+export async function getPubReviews(pubId: string) {
+  return request<PubReview[]>(`/api/reviews/${encodeURIComponent(pubId)}/reviews`, { auth: false });
+}
+
+export async function submitReview(payload: { pubId: string; rating: number; pubName?: string; note?: string }) {
   return request<PubRating & { pubId: string; points: number }>('/api/reviews', {
     method: 'POST',
     body: JSON.stringify(payload),

@@ -1,12 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { Beer, ChevronRight, LocateFixed, Navigation, Search, SlidersHorizontal, Zap } from 'lucide-react-native';
+import { Beer, ChevronRight, LocateFixed, Navigation, Search, X, Zap } from 'lucide-react-native';
 import { filters } from '../data/goodpint';
 import { colors, font, radii } from '../theme';
 import type { FilterKey, OsmPub, RatingMap } from '../types';
@@ -29,7 +30,8 @@ interface ExploreScreenProps {
   pubsError: boolean;
   ratings: RatingMap;
   userRatings: Record<string, number>;
-  onSubmitReview: (pubId: string, rating: number, pubName: string) => void;
+  onSubmitReview: (pubId: string, rating: number, pubName: string, note?: string) => void;
+  onOpenBuy: (venueId: string, pubName: string) => void;
 }
 
 export function ExploreScreen({
@@ -44,6 +46,7 @@ export function ExploreScreen({
   ratings,
   userRatings,
   onSubmitReview,
+  onOpenBuy,
 }: ExploreScreenProps) {
   const [query, setQuery] = useState('');
   const [selectedPub, setSelectedPub] = useState<OsmPub | null>(null);
@@ -98,7 +101,11 @@ export function ExploreScreen({
           style={styles.searchInput}
           selectionColor={colors.gold}
         />
-        <SlidersHorizontal color={colors.textMuted} size={20} />
+        {query.length > 0 ? (
+          <Pressable onPress={() => setQuery('')} hitSlop={8}>
+            <X color={colors.textMuted} size={18} />
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.filterRow}>
@@ -143,7 +150,10 @@ export function ExploreScreen({
       <View style={styles.nearbySection}>
         <View style={styles.nearbyHeadingRow}>
           <Text style={styles.nearbyHeading}>
-            {selectedFilter === 'top-rated' ? 'Top Rated Bars' : 'Nearby Bars'}
+            {selectedFilter === 'top-rated' ? 'Top Rated Bars'
+              : selectedFilter === 'happy-hour' ? 'Happy Hour Bars'
+              : selectedFilter === 'live-music' ? 'Live Music Bars'
+              : 'Nearby Bars'}
           </Text>
           {!pubsLoading && !pubsError && visiblePubs.length > 0 ? (
             <Text style={styles.nearbyCount}>{visiblePubs.length}</Text>
@@ -227,6 +237,7 @@ export function ExploreScreen({
         userRating={selectedPub ? userRatings[selectedPub.id] : undefined}
         onSubmitReview={onSubmitReview}
         onClose={() => setSelectedPub(null)}
+        onOpenBuy={onOpenBuy}
       />
     </View>
   );

@@ -1,4 +1,4 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, StyleSheet, Text, View } from 'react-native';
 import { Bell, ChevronRight, MapPin, ShieldCheck, Star, UserRound } from 'lucide-react-native';
 import { colors, font, formatCurrency, formatPoints, radii } from '../theme';
 import type { MemberProfile, Venue, WalletState } from '../types';
@@ -17,7 +17,7 @@ export function ProfileScreen({ profile, points, wallet, favoriteVenue }: Profil
     <View>
       <View style={styles.header}>
         <Text style={styles.title}>Profile</Text>
-        <PressableScale accessibilityLabel="Notifications" style={styles.iconButton}>
+        <PressableScale accessibilityLabel="Notifications" style={styles.iconButton} onPress={() => Alert.alert('Notifications', 'No new notifications.')}>
           <Bell color={colors.gold} size={21} />
         </PressableScale>
       </View>
@@ -64,10 +64,12 @@ export function ProfileScreen({ profile, points, wallet, favoriteVenue }: Profil
       <SectionCard>
         {['Saved venues', 'Notification settings', 'Help and support'].map((item, index) => (
           <View key={item}>
-            <View style={styles.menuRow}>
-              <Text style={styles.menuText}>{item}</Text>
-              <ChevronRight color={colors.textMuted} size={21} />
-            </View>
+            <PressableScale onPress={() => Alert.alert(item, 'Coming soon.')}>
+              <View style={styles.menuRow}>
+                <Text style={styles.menuText}>{item}</Text>
+                <ChevronRight color={colors.textMuted} size={21} />
+              </View>
+            </PressableScale>
             {index < 2 ? <View style={styles.divider} /> : null}
           </View>
         ))}

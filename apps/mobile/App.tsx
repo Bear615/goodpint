@@ -1,12 +1,14 @@
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BottomNav } from './src/components/BottomNav';
 import { AnimatedScreen } from './src/components/Motion';
 import { ScreenFrame } from './src/components/ScreenFrame';
-import { initialAppState } from './src/data/goodpint';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { emptyAppState } from './src/data/goodpint';
+import { AuthScreen } from './src/screens/AuthScreen';
 import { BuyDrinkScreen } from './src/screens/BuyDrinkScreen';
 import { ExploreScreen } from './src/screens/ExploreScreen';
 import { PlanScreen } from './src/screens/PlanScreen';
@@ -14,12 +16,12 @@ import { PointsScreen } from './src/screens/PointsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { RedeemScreen } from './src/screens/RedeemScreen';
 import { WalletScreen } from './src/screens/WalletScreen';
-import { createOrder, getAppState, getRatings, getUserRatings, submitReview, topUpWallet } from './src/services/api';
-import { getUserId } from './src/utils/userId';
-import type { AppStatePayload, CartItem, FilterKey, OsmPub, RatingMap, TabKey, Transaction, WalletState } from './src/types';
+import { createOrder, getAppState, getRatings, getUserRatings, redeemReward, submitReview, topUpWallet } from './src/services/api';
+import { colors } from './src/theme';
+import type { AppStatePayload, CartItem, FilterKey, OsmPub, RatingMap, TabKey, Transaction, Voucher, WalletState } from './src/types';
 import { fetchNearbyPubs } from './src/utils/pubs';
 
-type NestedRoute = { name: 'redeem'; rewardId: string } | { name: 'buy'; venueId: string } | null;
+type NestedRoute = { name: 'redeem'; rewardId: string } | { name: 'buy'; venueId: string; pubName: string } | null;
 
 function nowTransaction(title: string, amount: number): Transaction {
   return {
@@ -30,11 +32,47 @@ function nowTransaction(title: string, amount: number): Transaction {
   };
 }
 
+// Top-level: provide auth and gate the rest of the app behind sign-in.
 export default function App() {
-  const [data, setData] = useState<AppStatePayload>(initialAppState);
-  const [points, setPoints] = useState(initialAppState.points);
-  const [wallet, setWallet] = useState<WalletState>(initialAppState.wallet);
-  const [transactions, setTransactions] = useState(initialAppState.transactions);
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+        <Root />
+      </AuthProvider>
+    </SafeAreaProvider>
+  );
+}
+
+function Root() {
+  const { status } = useAuth();
+
+  if (status === 'loading') {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color={colors.gold} size="large" />
+      </View>
+    );
+  }
+
+  if (status === 'unauthenticated') {
+    return <AuthScreen />;
+  }
+
+  return <MainApp />;
+}
+
+function MainApp() {
+  const { user } = useAuth();
+  // Seed the profile from the authenticated user so the UI never flashes blank
+  // before the full app-state loads.
+  const seededState: AppStatePayload = user
+    ? { ...emptyAppState, user: { id: user.id, email: user.email }, profile: user }
+    : emptyAppState;
+
+  const [data, setData] = useState<AppStatePayload>(seededState);
+  const [points, setPoints] = useState(seededState.points);
+  const [wallet, setWallet] = useState<WalletState>(seededState.wallet);
+  const [transactions, setTransactions] = useState(seededState.transactions);
   const [activeTab, setActiveTab] = useState<TabKey>('explore');
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterKey>('nearby');
@@ -46,8 +84,9 @@ export default function App() {
   const [ratings, setRatings] = useState<RatingMap>({});
   const [userRatings, setUserRatings] = useState<Record<string, number>>({});
   const [route, setRoute] = useState<NestedRoute>(null);
-  const [cart, setCart] = useState<CartItem[]>([{ drinkId: initialAppState.drinks[0].id, quantity: 1 }]);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [secondsRemaining, setSecondsRemaining] = useState(299);
+  const [activeVoucher, setActiveVoucher] = useState<Voucher | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -62,10 +101,12 @@ export default function App() {
         setPoints(remoteState.points);
         setWallet(remoteState.wallet);
         setTransactions(remoteState.transactions);
-        setCart([{ drinkId: remoteState.drinks[0]?.id ?? 'goodpint-lager', quantity: 1 }]);
+        if (remoteState.drinks[0]) {
+          setCart([{ drinkId: remoteState.drinks[0].id, quantity: 1 }]);
+        }
       })
       .catch(() => {
-        // The mobile app is intentionally useful without the local API running.
+        // Leave the seeded empty state in place if the API is unreachable.
       });
 
     getRatings()
@@ -74,20 +115,20 @@ export default function App() {
       })
       .catch(() => undefined);
 
-    getUserId()
-      .then((userId) => getUserRatings(userId))
-      .then((remoteUserRatings) => {
-        if (mounted) setUserRatings(remoteUserRatings);
-      })
-      .catch(() => undefined);
+    if (user) {
+      getUserRatings(user.id)
+        .then((remoteUserRatings) => {
+          if (mounted) setUserRatings(remoteUserRatings);
+        })
+        .catch(() => undefined);
+    }
 
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user]);
 
-  const handleSubmitReview = async (pubId: string, rating: number, pubName: string) => {
-    const userId = await getUserId();
+  const handleSubmitReview = async (pubId: string, rating: number, pubName: string, note?: string) => {
     const prevUserRating = userRatings[pubId];
 
     // Optimistic update: if new review add to count, if update keep count.
@@ -104,7 +145,7 @@ export default function App() {
       return { ...current, [pubId]: { average, count } };
     });
 
-    submitReview({ pubId, userId, rating, pubName })
+    submitReview({ pubId, rating, pubName, note })
       .then((result) => {
         setRatings((current) => ({ ...current, [pubId]: { average: result.average, count: result.count } }));
         setPoints(result.points);
@@ -163,7 +204,9 @@ export default function App() {
   }, [route]);
 
   const selectedReward = route?.name === 'redeem' ? data.rewards.find((reward) => reward.id === route.rewardId) : undefined;
-  const selectedVenue = route?.name === 'buy' ? data.venues.find((venue) => venue.id === route.venueId) ?? data.venues[0] : data.venues[0];
+  const selectedVenue = route?.name === 'buy'
+    ? (data.venues.find((venue) => venue.id === route.venueId) ?? { ...data.venues[0], id: route.venueId, name: route.pubName })
+    : data.venues[0];
 
   const cartTotal = useMemo(
     () =>
@@ -190,8 +233,28 @@ export default function App() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  const openRedeem = (rewardId?: string) => {
-    const nextRewardId = rewardId || data.rewards[0]?.id || 'free-drink';
+  // Redeem a reward against the server, then show the issued voucher.
+  const openRedeem = async (rewardId?: string) => {
+    const nextRewardId = rewardId || data.rewards[0]?.id;
+    if (!nextRewardId) {
+      return;
+    }
+
+    const reward = data.rewards.find((candidate) => candidate.id === nextRewardId);
+    if (reward && points < reward.points) {
+      Alert.alert('Not enough points', `You need ${reward.points} points to redeem ${reward.title}.`);
+      return;
+    }
+
+    try {
+      const result = await redeemReward({ rewardId: nextRewardId });
+      setPoints(result.points);
+      setActiveVoucher(result.voucher);
+      setData((current) => ({ ...current, vouchers: [result.voucher, ...current.vouchers] }));
+    } catch {
+      Alert.alert('Could not redeem', 'Something went wrong redeeming that reward. Please try again.');
+      return;
+    }
 
     setSwipeDirection(null);
     setActiveTab('points');
@@ -199,11 +262,11 @@ export default function App() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  const openBuy = (venueId: string) => {
+  const openBuy = (venueId: string, pubName: string) => {
     setSwipeDirection(null);
     setActiveTab('explore');
     setCart([{ drinkId: data.drinks[0]?.id ?? 'goodpint-lager', quantity: 1 }]);
-    setRoute({ name: 'buy', venueId });
+    setRoute({ name: 'buy', venueId, pubName });
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
@@ -251,7 +314,13 @@ export default function App() {
     setActiveTab('wallet');
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    void createOrder({ venueId: selectedVenue.id, items: cart }).catch(() => undefined);
+    // Reconcile with the server's authoritative points/wallet totals.
+    createOrder({ venueId: selectedVenue.id, items: cart })
+      .then((result) => {
+        setPoints(result.points);
+        setWallet((currentWallet) => ({ ...currentWallet, balance: result.walletBalance }));
+      })
+      .catch(() => undefined);
     Alert.alert('Drink booked', `Your order at ${selectedVenue.name} is ready for pickup soon.`);
   };
 
@@ -264,7 +333,9 @@ export default function App() {
     }));
     setTransactions((currentTransactions) => [nowTransaction('Wallet top up', amount), ...currentTransactions]);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    void topUpWallet({ amount }).catch(() => undefined);
+    topUpWallet({ amount })
+      .then((result) => setWallet((currentWallet) => ({ ...currentWallet, balance: result.balance })))
+      .catch(() => undefined);
   };
 
   const inviteFriends = () => {
@@ -285,6 +356,7 @@ export default function App() {
       <RedeemScreen
         points={points}
         reward={selectedReward}
+        voucher={activeVoucher}
         secondsRemaining={secondsRemaining}
         onBack={goBack}
       />
@@ -309,12 +381,29 @@ export default function App() {
         earningRules={data.earningRules}
         tiers={data.tiers}
         onOpenRedeem={openRedeem}
+        onOpenHistory={() => changeTab('wallet')}
       />
     );
   } else if (activeTab === 'plan') {
-    content = <PlanScreen trips={data.trips} venues={data.venues} onInviteFriends={inviteFriends} />;
+    content = (
+      <PlanScreen
+        trips={data.trips}
+        venues={data.venues}
+        onInviteFriends={inviteFriends}
+        onAddStop={() => changeTab('explore')}
+        onOpenBuy={openBuy}
+      />
+    );
   } else if (activeTab === 'wallet') {
-    content = <WalletScreen wallet={wallet} passes={data.passes} transactions={transactions} onTopUp={topUp} />;
+    content = (
+      <WalletScreen
+        wallet={wallet}
+        passes={data.passes}
+        vouchers={data.vouchers}
+        transactions={transactions}
+        onTopUp={topUp}
+      />
+    );
   } else if (activeTab === 'profile') {
     content = (
       <ProfileScreen
@@ -338,6 +427,7 @@ export default function App() {
         ratings={ratings}
         userRatings={userRatings}
         onSubmitReview={handleSubmitReview}
+        onOpenBuy={openBuy}
       />
     );
   }
@@ -355,10 +445,17 @@ export default function App() {
   };
 
   return (
-    <SafeAreaProvider>
-      <ScreenFrame bottomNav={bottomNav} scrollKey={animationKey} onSwipeLeft={swipeLeft} onSwipeRight={swipeRight}>
-        <AnimatedScreen animationKey={animationKey} variant={route ? 'push' : 'tab'} direction={route ? null : swipeDirection}>{content}</AnimatedScreen>
-      </ScreenFrame>
-    </SafeAreaProvider>
+    <ScreenFrame bottomNav={bottomNav} scrollKey={animationKey} onSwipeLeft={swipeLeft} onSwipeRight={swipeRight}>
+      <AnimatedScreen animationKey={animationKey} variant={route ? 'push' : 'tab'} direction={route ? null : swipeDirection}>{content}</AnimatedScreen>
+    </ScreenFrame>
   );
 }
+
+const styles = StyleSheet.create({
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
+});

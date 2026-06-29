@@ -1,19 +1,24 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight, Gift, History, Plus, Star, WalletCards } from 'lucide-react-native';
+import React from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, font, formatCurrency, radii } from '../theme';
-import type { Pass, Transaction, WalletState } from '../types';
+import type { Pass, Transaction, Voucher, WalletState } from '../types';
 import { PressableScale } from '../components/Motion';
 import { SectionCard } from '../components/SectionCard';
 
 interface WalletScreenProps {
   wallet: WalletState;
   passes: Pass[];
+  // Redeemed rewards the user can present at a pub.
+  vouchers?: Voucher[];
   transactions: Transaction[];
   onTopUp: () => void;
 }
 
 export function WalletScreen({ wallet, passes, transactions, onTopUp }: WalletScreenProps) {
+  const [showAll, setShowAll] = React.useState(false);
+  const visibleTx = showAll ? transactions : transactions.slice(0, 3);
   return (
     <View>
       <Text style={styles.title}>Wallet</Text>
@@ -51,22 +56,26 @@ export function WalletScreen({ wallet, passes, transactions, onTopUp }: WalletSc
       </View>
 
       <SectionCard>
-        <View style={styles.menuRow}>
-          <WalletCards color={colors.text} size={23} />
-          <Text style={styles.menuText}>Payment Methods</Text>
-          <ChevronRight color={colors.text} size={22} />
-        </View>
+        <PressableScale onPress={() => Alert.alert('Payment Methods', 'Card management coming soon.')}>
+          <View style={styles.menuRow}>
+            <WalletCards color={colors.text} size={23} />
+            <Text style={styles.menuText}>Payment Methods</Text>
+            <ChevronRight color={colors.text} size={22} />
+          </View>
+        </PressableScale>
         <View style={styles.menuDivider} />
-        <View style={styles.menuRow}>
-          <History color={colors.text} size={23} />
-          <Text style={styles.menuText}>Transaction History</Text>
-          <ChevronRight color={colors.text} size={22} />
-        </View>
+        <PressableScale onPress={() => setShowAll((v) => !v)}>
+          <View style={styles.menuRow}>
+            <History color={colors.text} size={23} />
+            <Text style={styles.menuText}>Transaction History</Text>
+            <ChevronRight color={colors.text} size={22} />
+          </View>
+        </PressableScale>
       </SectionCard>
 
-      <Text style={styles.sectionTitle}>Recent</Text>
+      <Text style={styles.sectionTitle}>{showAll ? 'All Transactions' : 'Recent'}</Text>
       <View style={styles.transactionList}>
-        {transactions.slice(0, 3).map((transaction) => (
+        {visibleTx.map((transaction) => (
           <View key={transaction.id} style={styles.transactionRow}>
             <View>
               <Text style={styles.transactionTitle}>{transaction.title}</Text>

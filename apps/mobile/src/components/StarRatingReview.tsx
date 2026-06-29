@@ -76,6 +76,13 @@ export function StarRatingReview({ initialStars = 0, onCelebrate, onRate }: Prop
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
+      // Hold the gesture against ancestors. ScreenFrame mounts a swipe
+      // PanResponder with onMoveShouldSetPanResponderCapture for tab swipes;
+      // once the finger moves >15px horizontally it tries to capture, which
+      // would yank the rating drag away after ~half a star. Refusing
+      // termination keeps the whole drag ours.
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
       onPanResponderGrant: (e) => {
         measureOrigin();
         startX.current = e.nativeEvent.pageX - containerX.current;
