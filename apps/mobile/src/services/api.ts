@@ -6,9 +6,16 @@ const runtime = globalThis as typeof globalThis & {
   process?: { env?: Record<string, string | undefined> };
 };
 
+// Dev machine's LAN IP — lets a physical phone on the same Wi-Fi reach the API.
+// Override anytime with EXPO_PUBLIC_API_BASE_URL (e.g. a different network or a
+// deployed server). Update this if your machine's LAN IP changes.
+const LAN_HOST = 'http://192.168.1.11:4000';
+
 const defaultHost = Platform.select({
-  android: 'http://10.0.2.2:4000',
-  default: 'http://localhost:4000',
+  // Web runs in the browser on the same machine as the API.
+  web: 'http://localhost:4000',
+  // Native (physical device or simulator) reaches the API over the LAN.
+  default: LAN_HOST,
 });
 
 export const API_BASE_URL =
