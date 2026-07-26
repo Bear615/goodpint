@@ -1,8 +1,8 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { StyleProp, View, ViewStyle } from 'react-native';
 import type { NativeMapRef } from './NativeMap';
 import type { OsmPub } from '../types';
-import { MAP_HTML } from './mapHtml';
+import { buildMapHtml } from './mapHtml';
 
 interface Props {
   userCoords: { lat: number; lon: number } | null;
@@ -12,6 +12,11 @@ interface Props {
   style?: StyleProp<ViewStyle>;
 }
 
+type Command =
+  | { type: 'setLocation'; lat: number; lon: number }
+  | { type: 'recenter'; lat: number; lon: number }
+  | { type: 'setPubs'; pubs: OsmPub[] };
+
 export const NativeMap = forwardRef<NativeMapRef, Props>(function NativeMap(
   { userCoords, pubs, onPubPress, onMapReady, style },
   ref,
@@ -19,55 +24,84 @@ export const NativeMap = forwardRef<NativeMapRef, Props>(function NativeMap(
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const readyRef = useRef(false);
 
-  function inject(code: string) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (iframeRef.current?.contentWindow as any)?.eval?.(code);
-    } catch {
-      // sandboxed iframe — ignore
-    }
-  }
+  // The frame is told, once, which origin it may talk to.
+  const parentOrigin = typeof window !== 'undefined' ? window.location.origin : null;
+  const html = useMemo(() => buildMapHtml(parentOrigin), [parentOrigin]);
+
+  /**
+   * Sends a structured command to the map.
+   *
+   * This used to be `contentWindow.eval(...)` of a generated JavaScript string,
+   * which required `allow-same-origin` on the sandbox — and `allow-scripts`
+   * together with `allow-same-origin` lets the frame reach out and strip its own
+   * sandbox attribute, so it was no sandbox at all. Passing data instead of code
+   * removes the need for both.
+   */
+  const send = useCallback((command: Command) => {
+    // The receiver is a window we created and hold a direct reference to, so
+    // there is no other frame this could reach.
+    iframeRef.current?.contentWindow?.postMessage(JSON.stringify(command), '*');
+  }, []);
 
   useImperativeHandle(ref, () => ({
-    recenter: (lat, lon) => inject(`recenter(${lat},${lon});`),
+    recenter: (lat, lon) => send({ type: 'recenter', lat, lon }),
   }));
 
   useEffect(() => {
     if (!readyRef.current || !userCoords) return;
-    inject(`setLocation(${userCoords.lat},${userCoords.lon});`);
-  }, [userCoords]);
+    send({ type: 'setLocation', lat: userCoords.lat, lon: userCoords.lon });
+  }, [userCoords, send]);
 
   useEffect(() => {
     if (!readyRef.current || !pubs.length) return;
-    inject(`setPubs(${JSON.stringify(pubs)});`);
-  }, [pubs]);
+    send({ type: 'setPubs', pubs });
+  }, [pubs, send]);
 
   useEffect(() => {
-    const handler = (e: MessageEvent) => {
-      if (e.source !== iframeRef.current?.contentWindow) return;
+    const handler = (event: MessageEvent) => {
+      // Identity check by window reference. The frame runs sandboxed with an
+      // opaque origin, so comparing origins would not distinguish it from any
+      // other sandboxed frame on the page.
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      if (typeof event.data !== 'string') return;
+
+      let payload: unknown;
       try {
-        onPubPress(JSON.parse(e.data) as OsmPub);
+        payload = JSON.parse(event.data);
       } catch {
-        // ignore
+        return;
       }
+      if (typeof payload !== 'object' || payload === null) return;
+
+      // The map announces itself once its script has run — more reliable than
+      // the iframe's load event, which fires before Leaflet has initialised.
+      if ((payload as { type?: string }).type === 'ready') {
+        readyRef.current = true;
+        if (userCoords) send({ type: 'setLocation', lat: userCoords.lat, lon: userCoords.lon });
+        if (pubs.length) send({ type: 'setPubs', pubs });
+        onMapReady?.();
+        return;
+      }
+
+      onPubPress(payload as OsmPub);
     };
+
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [onPubPress]);
+  }, [onPubPress, onMapReady, send, userCoords, pubs]);
 
   return (
     <View style={style}>
       <iframe
         ref={iframeRef}
-        srcDoc={MAP_HTML}
-        sandbox="allow-scripts allow-same-origin"
+        title="Nearby pubs map"
+        srcDoc={html}
+        // allow-scripts only. Notably absent: allow-same-origin (which would let
+        // the frame remove this very attribute), allow-popups, allow-forms, and
+        // allow-top-navigation.
+        sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
         style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-        onLoad={() => {
-          readyRef.current = true;
-          if (userCoords) inject(`setLocation(${userCoords.lat},${userCoords.lon});`);
-          if (pubs.length) inject(`setPubs(${JSON.stringify(pubs)});`);
-          onMapReady?.();
-        }}
       />
     </View>
   );

@@ -116,7 +116,7 @@ function MainApp() {
       .catch(() => undefined);
 
     if (user) {
-      getUserRatings(user.id)
+      getUserRatings()
         .then((remoteUserRatings) => {
           if (mounted) setUserRatings(remoteUserRatings);
         })
