@@ -7,7 +7,8 @@
     "dev": "cross-env NODE_OPTIONS=--experimental-sqlite tsx watch src/index.ts",
     "build": "tsc",
     "start": "cross-env NODE_OPTIONS=--experimental-sqlite node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit -p tsconfig.check.json",
+    "test": "cross-env NODE_OPTIONS=--experimental-sqlite node --import tsx --test src/security.test.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",

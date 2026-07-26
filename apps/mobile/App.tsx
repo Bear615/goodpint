@@ -16,7 +16,7 @@ import { PointsScreen } from './src/screens/PointsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { RedeemScreen } from './src/screens/RedeemScreen';
 import { WalletScreen } from './src/screens/WalletScreen';
-import { createOrder, getAppState, getRatings, getUserRatings, redeemReward, submitReview, topUpWallet } from './src/services/api';
+import { ApiError, createOrder, getAppState, getRatings, getUserRatings, newIdempotencyKey, redeemReward, submitReview, topUpWallet } from './src/services/api';
 import { colors } from './src/theme';
 import type { AppStatePayload, CartItem, FilterKey, OsmPub, RatingMap, TabKey, Transaction, Voucher, WalletState } from './src/types';
 import { fetchNearbyPubs } from './src/utils/pubs';
@@ -85,6 +85,13 @@ function MainApp() {
   const [userRatings, setUserRatings] = useState<Record<string, number>>({});
   const [route, setRoute] = useState<NestedRoute>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
+  // Guards the value-moving flows against a double tap sending two orders.
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // One key per checkout, held across retries. If the first attempt actually
+  // reached the server but the reply was lost, retrying with the same key
+  // replays that result instead of placing a second order; a fresh key per
+  // attempt would defeat the whole mechanism.
+  const orderKeyRef = useRef<string | null>(null);
   const [secondsRemaining, setSecondsRemaining] = useState(299);
   const [activeVoucher, setActiveVoucher] = useState<Voucher | null>(null);
 
@@ -116,7 +123,7 @@ function MainApp() {
       .catch(() => undefined);
 
     if (user) {
-      getUserRatings(user.id)
+      getUserRatings()
         .then((remoteUserRatings) => {
           if (mounted) setUserRatings(remoteUserRatings);
         })
@@ -130,6 +137,7 @@ function MainApp() {
 
   const handleSubmitReview = async (pubId: string, rating: number, pubName: string, note?: string) => {
     const prevUserRating = userRatings[pubId];
+    const previousRating = ratings[pubId] ?? { average: 0, count: 0 };
 
     // Optimistic update: if new review add to count, if update keep count.
     setUserRatings((current) => ({ ...current, [pubId]: rating }));
@@ -145,12 +153,27 @@ function MainApp() {
       return { ...current, [pubId]: { average, count } };
     });
 
-    submitReview({ pubId, rating, pubName, note })
-      .then((result) => {
-        setRatings((current) => ({ ...current, [pubId]: { average: result.average, count: result.count } }));
-        setPoints(result.points);
-      })
-      .catch(() => undefined);
+    // An optimistic rating is fine — it is display state, not money — but a
+    // rejection has to be undone rather than swallowed. Submissions can now be
+    // refused (the daily new-pub cap, or the write rate limit), and leaving the
+    // optimistic value in place would show a rating that was never saved.
+    try {
+      const result = await submitReview({ pubId, rating, pubName, note });
+      setRatings((current) => ({ ...current, [pubId]: { average: result.average, count: result.count } }));
+      setPoints(result.points);
+    } catch (error) {
+      setUserRatings((current) => {
+        const reverted = { ...current };
+        if (prevUserRating === undefined) delete reverted[pubId];
+        else reverted[pubId] = prevUserRating;
+        return reverted;
+      });
+      setRatings((current) => ({ ...current, [pubId]: previousRating }));
+      Alert.alert(
+        'Review not saved',
+        error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
+      );
+    }
   };
 
   useEffect(() => {
@@ -284,58 +307,77 @@ function MainApp() {
     });
   };
 
-  const payForOrder = () => {
+  // Money moves only once the server says it did.
+  //
+  // These flows used to update the local balance, announce success, and *then*
+  // fire the request with its rejection swallowed. Anything the server refused —
+  // a stale balance, a rate limit, a pub that came from the map rather than our
+  // catalog — left the user looking at a confirmation and a debited balance for
+  // an order that did not exist. The server is the only authority on a balance,
+  // so nothing is shown until it has answered.
+  const payForOrder = async () => {
+    if (isSubmitting) return;
+
     if (cartTotal <= 0) {
       Alert.alert('Add a drink', 'Choose at least one drink before paying.');
       return;
     }
 
+    // A courtesy check so the common case fails fast and locally; the server
+    // enforces the real one against the authoritative balance.
     if (wallet.balance < cartTotal) {
       Alert.alert('Top up wallet', 'Add funds to your GoodPint Card before placing this order.');
       return;
     }
 
-    const pointsEarned = cart.reduce((total, item) => {
-      const drink = data.drinks.find((candidate) => candidate.id === item.drinkId);
-      return total + (drink?.points ?? 0) * item.quantity;
-    }, 0);
+    if (!orderKeyRef.current) orderKeyRef.current = newIdempotencyKey();
 
-    setWallet((currentWallet) => ({
-      ...currentWallet,
-      balance: Number((currentWallet.balance - cartTotal).toFixed(2)),
-    }));
-    setPoints((currentPoints) => currentPoints + pointsEarned);
-    setTransactions((currentTransactions) => [
-      nowTransaction(selectedVenue.name, -cartTotal),
-      ...currentTransactions,
-    ]);
-    setSwipeDirection(null);
-    setRoute(null);
-    setActiveTab('wallet');
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setIsSubmitting(true);
+    try {
+      const result = await createOrder({ venueId: selectedVenue.id, items: cart }, orderKeyRef.current);
+      orderKeyRef.current = null;
 
-    // Reconcile with the server's authoritative points/wallet totals.
-    createOrder({ venueId: selectedVenue.id, items: cart })
-      .then((result) => {
-        setPoints(result.points);
-        setWallet((currentWallet) => ({ ...currentWallet, balance: result.walletBalance }));
-      })
-      .catch(() => undefined);
-    Alert.alert('Drink booked', `Your order at ${selectedVenue.name} is ready for pickup soon.`);
+      setPoints(result.points);
+      setWallet((currentWallet) => ({ ...currentWallet, balance: result.walletBalance }));
+      setTransactions((currentTransactions) => [
+        nowTransaction(selectedVenue.name, -cartTotal),
+        ...currentTransactions,
+      ]);
+      setSwipeDirection(null);
+      setRoute(null);
+      setActiveTab('wallet');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Drink booked', `Your order at ${selectedVenue.name} is ready for pickup soon.`);
+    } catch (error) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        'Order not placed',
+        error instanceof ApiError ? error.message : 'Something went wrong. Your card has not been charged.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const topUp = () => {
+  const topUp = async () => {
+    if (isSubmitting) return;
     const amount = 25;
 
-    setWallet((currentWallet) => ({
-      ...currentWallet,
-      balance: Number((currentWallet.balance + amount).toFixed(2)),
-    }));
-    setTransactions((currentTransactions) => [nowTransaction('Wallet top up', amount), ...currentTransactions]);
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    topUpWallet({ amount })
-      .then((result) => setWallet((currentWallet) => ({ ...currentWallet, balance: result.balance })))
-      .catch(() => undefined);
+    setIsSubmitting(true);
+    try {
+      const result = await topUpWallet({ amount }, newIdempotencyKey());
+      setWallet((currentWallet) => ({ ...currentWallet, balance: result.balance }));
+      setTransactions((currentTransactions) => [nowTransaction('Wallet top up', amount), ...currentTransactions]);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        'Top up failed',
+        error instanceof ApiError ? error.message : 'Something went wrong. Your card has not been charged.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const inviteFriends = () => {

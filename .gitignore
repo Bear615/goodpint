@@ -12,9 +12,15 @@ expo-env.d.ts
 # generated builds
 packages/api/dist/
 
-# local sqlite database
-packages/api/goodpint.db
-packages/api/goodpint.db-*
+# local sqlite database — the path is configurable (GOODPINT_DB_PATH) and
+# defaults to the working directory, so match anywhere rather than one location.
+# It holds password hashes and session rows and must never be committed.
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.sqlite
+*.sqlite3
 
 # local runtime output
 .codex/

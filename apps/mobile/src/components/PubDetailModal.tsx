@@ -115,13 +115,13 @@ export function PubDetailModal({ pub, rating, userRating, onClose, onSubmitRevie
     setReviews((current) => {
       const own: PubReview = {
         id: `local-${pub.id}`,
-        userId,
         pubName: pub.name,
         rating: pendingStars,
         note: trimmedNote ?? null,
         createdAt: new Date().toISOString(),
+        isMine: true,
       };
-      const others = current.filter((r) => r.userId !== userId);
+      const others = current.filter((r) => !r.isMine);
       return [own, ...others];
     });
     const pubId = pub.id;
@@ -274,12 +274,12 @@ export function PubDetailModal({ pub, rating, userRating, onClose, onSubmitRevie
                   reviews
                     .slice()
                     .sort((a, b) => {
-                      const aOwn = a.userId === userId ? 0 : 1;
-                      const bOwn = b.userId === userId ? 0 : 1;
+                      const aOwn = a.isMine ? 0 : 1;
+                      const bOwn = b.isMine ? 0 : 1;
                       return aOwn - bOwn;
                     })
                     .map((r) => {
-                      const isOwn = r.userId != null && r.userId === userId;
+                      const isOwn = r.isMine;
                       return (
                         <View key={r.id} style={styles.reviewItem}>
                           <View style={styles.reviewItemHead}>

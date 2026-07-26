@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { StyleProp, ViewStyle } from 'react-native';
 import WebView from 'react-native-webview';
 import { MAP_HTML } from './mapHtml';
@@ -16,6 +16,11 @@ interface Props {
   style?: StyleProp<ViewStyle>;
 }
 
+type Command =
+  | { type: 'setLocation'; lat: number; lon: number }
+  | { type: 'recenter'; lat: number; lon: number }
+  | { type: 'setPubs'; pubs: OsmPub[] };
+
 export const NativeMap = forwardRef<NativeMapRef, Props>(function NativeMap(
   { userCoords, pubs, onPubPress, onMapReady, style },
   ref,
@@ -23,37 +28,35 @@ export const NativeMap = forwardRef<NativeMapRef, Props>(function NativeMap(
   const webViewRef = useRef<WebView>(null);
   const readyRef = useRef(false);
 
-  // Always-current refs so handleLoad sees latest values regardless of when it fires
+  // Always-current refs so the ready handshake sees the latest values regardless
+  // of when it fires.
   const userCoordsRef = useRef(userCoords);
   const pubsRef = useRef(pubs);
   userCoordsRef.current = userCoords;
   pubsRef.current = pubs;
 
-  function inject(code: string) {
-    webViewRef.current?.injectJavaScript(code + '; true;');
-  }
+  /**
+   * Sends data, not code. The previous version built a JavaScript string and
+   * handed it to injectJavaScript; keeping the bridge to structured messages
+   * means nothing that flows through here can ever be parsed as script.
+   */
+  const send = useCallback((command: Command) => {
+    webViewRef.current?.postMessage(JSON.stringify(command));
+  }, []);
 
   useImperativeHandle(ref, () => ({
-    recenter: (lat, lon) => inject(`recenter(${lat},${lon})`),
+    recenter: (lat, lon) => send({ type: 'recenter', lat, lon }),
   }));
 
-  const handleLoad = () => {
-    readyRef.current = true;
-    if (userCoordsRef.current) inject(`setLocation(${userCoordsRef.current.lat},${userCoordsRef.current.lon})`);
-    if (pubsRef.current.length) inject(`setPubs(${JSON.stringify(pubsRef.current)})`);
-    onMapReady?.();
-  };
-
-  // Push prop updates after map is ready; handleLoad covers pre-ready values
   useEffect(() => {
     if (!readyRef.current || !userCoords) return;
-    inject(`setLocation(${userCoords.lat},${userCoords.lon})`);
-  }, [userCoords]);
+    send({ type: 'setLocation', lat: userCoords.lat, lon: userCoords.lon });
+  }, [userCoords, send]);
 
   useEffect(() => {
     if (!readyRef.current || !pubs.length) return;
-    inject(`setPubs(${JSON.stringify(pubs)})`);
-  }, [pubs]);
+    send({ type: 'setPubs', pubs });
+  }, [pubs, send]);
 
   return (
     <WebView
@@ -62,13 +65,48 @@ export const NativeMap = forwardRef<NativeMapRef, Props>(function NativeMap(
       style={style}
       javaScriptEnabled
       scrollEnabled={false}
-      onLoadEnd={handleLoad}
-      onMessage={(e) => {
+      // The map is a fixed local document; it has no reason to read the file
+      // system, open windows, or navigate anywhere.
+      originWhitelist={['about:blank']}
+      allowFileAccess={false}
+      allowFileAccessFromFileURLs={false}
+      allowUniversalAccessFromFileURLs={false}
+      javaScriptCanOpenWindowsAutomatically={false}
+      setSupportMultipleWindows={false}
+      allowsInlineMediaPlayback={false}
+      thirdPartyCookiesEnabled={false}
+      cacheEnabled
+      // Only the tile server and the pinned Leaflet bundle may be loaded; a link
+      // that tries to navigate the WebView elsewhere is refused.
+      onShouldStartLoadWithRequest={(request) => {
+        const { url } = request;
+        return (
+          url === 'about:blank' ||
+          url.startsWith('data:') ||
+          url.startsWith('https://unpkg.com/') ||
+          url.includes('.basemaps.cartocdn.com/')
+        );
+      }}
+      onMessage={(event) => {
+        let payload: unknown;
         try {
-          onPubPress(JSON.parse(e.nativeEvent.data) as OsmPub);
+          payload = JSON.parse(event.nativeEvent.data) as unknown;
         } catch {
-          // ignore
+          return;
         }
+        if (typeof payload !== 'object' || payload === null) return;
+
+        if ((payload as { type?: string }).type === 'ready') {
+          readyRef.current = true;
+          if (userCoordsRef.current) {
+            send({ type: 'setLocation', lat: userCoordsRef.current.lat, lon: userCoordsRef.current.lon });
+          }
+          if (pubsRef.current.length) send({ type: 'setPubs', pubs: pubsRef.current });
+          onMapReady?.();
+          return;
+        }
+
+        onPubPress(payload as OsmPub);
       }}
     />
   );

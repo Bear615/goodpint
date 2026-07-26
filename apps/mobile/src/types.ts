@@ -105,11 +105,14 @@ export type RatingMap = Record<string, PubRating>;
 
 export interface PubReview {
   id: string;
-  userId: string | null;
   pubName: string | null;
   rating: number;
   note: string | null;
   createdAt: string;
+  // Author ids are deliberately not sent to clients: on a public endpoint they
+  // would let anyone reconstruct which pubs an account has visited. The server
+  // resolves ownership against the session and sends only this flag.
+  isMine: boolean;
 }
 
 export interface CartItem {

@@ -1,0 +1,10 @@
+{
+  // Typechecks everything including tests. The build (tsconfig.json) excludes
+  // test modules so they never reach dist/.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src"],
+  "exclude": []
+}
