@@ -64,11 +64,23 @@ try {
   // Column already exists — nothing to do.
 }
 
+// Migration 5: record when a review row was first created.
+//
+// created_at is bumped on every edit, so it cannot answer "how many pubs has
+// this account reviewed today" — which is what bounds the public ratings map
+// against an account inventing pub ids. This column is written once, on insert.
+try {
+  sqlite.exec(`ALTER TABLE reviews ADD COLUMN first_reviewed_at TEXT`);
+  sqlite.exec(`UPDATE reviews SET first_reviewed_at = created_at WHERE first_reviewed_at IS NULL`);
+} catch {
+  // Column already exists — nothing to do.
+}
+
 const existsStmt = sqlite.prepare(
   `SELECT id FROM reviews WHERE pub_id = ? AND user_id = ? LIMIT 1`,
 );
 const insertStmt = sqlite.prepare(
-  `INSERT INTO reviews (id, pub_id, user_id, pub_name, rating, note, created_at, points_awarded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  `INSERT INTO reviews (id, pub_id, user_id, pub_name, rating, note, created_at, points_awarded_at, first_reviewed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 );
 const updateStmt = sqlite.prepare(
   `UPDATE reviews SET rating = ?, pub_name = COALESCE(?, pub_name), note = ?, created_at = ? WHERE pub_id = ? AND user_id = ?`,
@@ -87,6 +99,9 @@ const userRatingsStmt = sqlite.prepare(
 );
 const recentGrantsStmt = sqlite.prepare(
   `SELECT COUNT(*) AS count FROM reviews WHERE user_id = ? AND points_awarded_at IS NOT NULL AND points_awarded_at > ?`,
+);
+const recentNewReviewsStmt = sqlite.prepare(
+  `SELECT COUNT(*) AS count FROM reviews WHERE user_id = ? AND first_reviewed_at > ?`,
 );
 
 export interface RatingSummary {
@@ -110,14 +125,27 @@ export function countRecentPointGrants(userId: string, sinceIso: string): number
   return row.count;
 }
 
+/**
+ * How many pubs this user has reviewed for the first time since `sinceIso`.
+ *
+ * GET /api/reviews/ratings returns a row per reviewed pub, and a pub id is just
+ * a client-supplied string. Without a bound on new reviews, one account can
+ * invent ids indefinitely and grow that unauthenticated public response without
+ * limit.
+ */
+export function countRecentNewReviews(userId: string, sinceIso: string): number {
+  const row = recentNewReviewsStmt.get(userId, sinceIso) as { count: number };
+  return row.count;
+}
+
 export function addReview(
   pubId: string,
   userId: string,
   rating: number,
   pubName?: string,
   note?: string,
-  options: { awardPoints?: boolean } = {},
-): { summary: RatingSummary; isNew: boolean; pointsAwarded: boolean } {
+  options: { awardPoints?: boolean; maxNewPerDay?: number } = {},
+): { summary: RatingSummary; isNew: boolean; pointsAwarded: boolean; rejected?: 'daily_new_limit' } {
   // The existence check and the write that depends on it are one unit: two
   // concurrent submissions must not both conclude "this is your first review
   // here" and both collect the bonus.
@@ -125,6 +153,16 @@ export function addReview(
     const existing = existsStmt.get(pubId, userId) as { id: string } | undefined;
     const isNew = !existing;
     const now = new Date().toISOString();
+
+    // Checked inside the transaction so concurrent submissions cannot both read
+    // a count below the limit and both insert.
+    if (isNew && options.maxNewPerDay !== undefined) {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      if (countRecentNewReviews(userId, since) >= options.maxNewPerDay) {
+        return { summary: getRating(pubId), isNew: false, pointsAwarded: false, rejected: 'daily_new_limit' as const };
+      }
+    }
+
     const pointsAwarded = isNew && options.awardPoints !== false;
 
     if (isNew) {
@@ -137,6 +175,7 @@ export function addReview(
         note ?? null,
         now,
         pointsAwarded ? now : null,
+        now,
       );
     } else {
       updateStmt.run(rating, pubName ?? null, note ?? null, now, pubId, userId);

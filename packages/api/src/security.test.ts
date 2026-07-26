@@ -377,6 +377,28 @@ describe('reviews', () => {
     assert.equal(result.pointsAwarded, false);
   });
 
+  it('caps how many new pubs one account can review per day', async () => {
+    const user = await makeUser();
+    // Pub ids are arbitrary client strings, so without a cap one account can
+    // invent them indefinitely and grow the public ratings response without end.
+    const outcomes = Array.from({ length: 6 }, (_, i) =>
+      addReview(`invented-pub-${i}`, user.id, 5, undefined, undefined, { maxNewPerDay: 3 }),
+    );
+
+    assert.equal(outcomes.filter((o) => o.rejected === 'daily_new_limit').length, 3);
+    assert.equal(outcomes.filter((o) => o.isNew).length, 3);
+  });
+
+  it('still lets an existing review be edited once the new-pub cap is hit', async () => {
+    const user = await makeUser();
+    assert.equal(addReview('editable-pub', user.id, 4, undefined, undefined, { maxNewPerDay: 1 }).isNew, true);
+
+    // Editing is not creating, so the cap must not block it.
+    const edit = addReview('editable-pub', user.id, 2, undefined, 'changed my mind', { maxNewPerDay: 1 });
+    assert.equal(edit.rejected, undefined);
+    assert.equal(edit.summary.average, 2);
+  });
+
   it('does not expose author ids on the public endpoint', async () => {
     const user = await makeUser();
     addReview('pub-2', user.id, 5, 'The Crown', 'Lovely');

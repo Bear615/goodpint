@@ -16,7 +16,7 @@ import { PointsScreen } from './src/screens/PointsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { RedeemScreen } from './src/screens/RedeemScreen';
 import { WalletScreen } from './src/screens/WalletScreen';
-import { ApiError, createOrder, getAppState, getRatings, getUserRatings, redeemReward, submitReview, topUpWallet } from './src/services/api';
+import { ApiError, createOrder, getAppState, getRatings, getUserRatings, newIdempotencyKey, redeemReward, submitReview, topUpWallet } from './src/services/api';
 import { colors } from './src/theme';
 import type { AppStatePayload, CartItem, FilterKey, OsmPub, RatingMap, TabKey, Transaction, Voucher, WalletState } from './src/types';
 import { fetchNearbyPubs } from './src/utils/pubs';
@@ -87,6 +87,11 @@ function MainApp() {
   const [cart, setCart] = useState<CartItem[]>([]);
   // Guards the value-moving flows against a double tap sending two orders.
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // One key per checkout, held across retries. If the first attempt actually
+  // reached the server but the reply was lost, retrying with the same key
+  // replays that result instead of placing a second order; a fresh key per
+  // attempt would defeat the whole mechanism.
+  const orderKeyRef = useRef<string | null>(null);
   const [secondsRemaining, setSecondsRemaining] = useState(299);
   const [activeVoucher, setActiveVoucher] = useState<Voucher | null>(null);
 
@@ -309,9 +314,12 @@ function MainApp() {
       return;
     }
 
+    if (!orderKeyRef.current) orderKeyRef.current = newIdempotencyKey();
+
     setIsSubmitting(true);
     try {
-      const result = await createOrder({ venueId: selectedVenue.id, items: cart });
+      const result = await createOrder({ venueId: selectedVenue.id, items: cart }, orderKeyRef.current);
+      orderKeyRef.current = null;
 
       setPoints(result.points);
       setWallet((currentWallet) => ({ ...currentWallet, balance: result.walletBalance }));
@@ -341,7 +349,7 @@ function MainApp() {
 
     setIsSubmitting(true);
     try {
-      const result = await topUpWallet({ amount });
+      const result = await topUpWallet({ amount }, newIdempotencyKey());
       setWallet((currentWallet) => ({ ...currentWallet, balance: result.balance }));
       setTransactions((currentTransactions) => [nowTransaction('Wallet top up', amount), ...currentTransactions]);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

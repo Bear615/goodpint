@@ -2,12 +2,7 @@ import { Platform } from 'react-native';
 import type { AppStatePayload, CartItem, PubRating, PubReview, RatingMap, User, Voucher } from '../types';
 import { getToken } from '../utils/authToken';
 
-const runtime = globalThis as typeof globalThis & {
-  process?: { env?: Record<string, string | undefined> };
-  __DEV__?: boolean;
-};
-
-const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : runtime.__DEV__ !== false;
+const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
 
 // Dev machine's LAN IP — lets a physical phone on the same Wi-Fi reach the API.
 // Override anytime with EXPO_PUBLIC_API_BASE_URL (e.g. a different network or a
@@ -21,8 +16,14 @@ const defaultHost = Platform.select({
   default: LAN_HOST,
 });
 
+// Written as a literal `process.env.EXPO_PUBLIC_...` member expression on
+// purpose. babel-preset-expo substitutes EXPO_PUBLIC_* variables at build time
+// by matching that exact syntax — reading it dynamically (through a variable, or
+// with optional chaining off globalThis) produces no substitution, so the
+// override would silently vanish from a release bundle and every build would
+// fall back to the hardcoded LAN address below.
 const configuredBaseUrl =
-  runtime.process?.env?.EXPO_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? defaultHost ?? 'http://localhost:4000';
+  process.env.EXPO_PUBLIC_API_BASE_URL?.replace(/\/$/, '') || defaultHost || 'http://localhost:4000';
 
 /**
  * Every request carries the session bearer token, so a plaintext base URL hands
@@ -77,14 +78,20 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): voi
 }
 
 /**
- * A per-request key so a retry cannot be mistaken for a second order.
+ * A key identifying one logical operation, so a retry cannot be mistaken for a
+ * second order.
+ *
+ * Mint this once per operation — per checkout, not per HTTP attempt — and pass
+ * the same value on every retry. A fresh key per attempt would defeat the whole
+ * mechanism: the user who taps pay, times out, and taps again would place two
+ * real orders.
  *
  * Uniqueness is all that is required: the server scopes keys to the calling
  * account, so knowing or guessing someone else's key gains an attacker nothing.
  * That is why the non-cryptographic fallback is acceptable here, and would not
- * be for a token or an identifier.
+ * be for a token or a session identifier.
  */
-function idempotencyKey(): string {
+export function newIdempotencyKey(): string {
   const webCrypto = (globalThis as { crypto?: Crypto }).crypto;
   if (typeof webCrypto?.randomUUID === 'function') return webCrypto.randomUUID();
   if (typeof webCrypto?.getRandomValues === 'function') {
@@ -96,8 +103,11 @@ function idempotencyKey(): string {
 
 interface RequestOptions extends RequestInit {
   auth?: boolean;
-  /** Send an idempotency key so a retried write is applied at most once. */
-  idempotent?: boolean;
+  /**
+   * Key identifying the logical operation, so a retried write is applied at
+   * most once. Supplied by the caller — see newIdempotencyKey.
+   */
+  idempotencyKey?: string;
 }
 
 async function request<T>(path: string, init?: RequestOptions): Promise<T> {
@@ -113,7 +123,7 @@ async function request<T>(path: string, init?: RequestOptions): Promise<T> {
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
-  if (init?.idempotent) headers['X-Idempotency-Key'] = idempotencyKey();
+  if (init?.idempotencyKey) headers['X-Idempotency-Key'] = init.idempotencyKey;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -186,27 +196,27 @@ export async function getAppState() {
   return request<AppStatePayload>('/api/app-state');
 }
 
-export async function createOrder(payload: { venueId: string; items: CartItem[] }) {
+export async function createOrder(payload: { venueId: string; items: CartItem[] }, idempotencyKey?: string) {
   return request<{ orderId: string; pointsEarned: number; points: number; walletBalance: number }>('/api/orders', {
     method: 'POST',
     body: JSON.stringify(payload),
-    idempotent: true,
+    idempotencyKey,
   });
 }
 
-export async function redeemReward(payload: { rewardId: string }) {
+export async function redeemReward(payload: { rewardId: string }, idempotencyKey?: string) {
   return request<{ redemptionId: string; voucher: Voucher; points: number; expiresAt: string | null }>('/api/redeem', {
     method: 'POST',
     body: JSON.stringify(payload),
-    idempotent: true,
+    idempotencyKey,
   });
 }
 
-export async function topUpWallet(payload: { amount: number }) {
+export async function topUpWallet(payload: { amount: number }, idempotencyKey?: string) {
   return request<{ balance: number; points: number }>('/api/wallet/top-up', {
     method: 'POST',
     body: JSON.stringify(payload),
-    idempotent: true,
+    idempotencyKey,
   });
 }
 

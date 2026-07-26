@@ -86,6 +86,24 @@ function list(name: string): string[] {
 
 export const PORT = integer('PORT', 4000, { min: 1, max: 65535 });
 
+/**
+ * Network interface to bind.
+ *
+ * The default binds every interface, which is what makes the documented dev
+ * workflow work — a physical phone on the same Wi-Fi has to reach this process.
+ * That also means the API, including the staff till endpoint, is reachable by
+ * anything on the network, so a production deployment should set this to
+ * 127.0.0.1 and put a TLS-terminating reverse proxy in front.
+ */
+export const HOST = optional('HOST') ?? '0.0.0.0';
+
+if (IS_PRODUCTION && (HOST === '0.0.0.0' || HOST === '::')) {
+  warn(
+    `Binding all interfaces (${HOST}) in production. The API — including /api/staff/redeem — is reachable ` +
+      'from any network that can route here. Prefer HOST=127.0.0.1 behind a reverse proxy.',
+  );
+}
+
 export const DB_PATH = optional('GOODPINT_DB_PATH') ?? path.join(process.cwd(), 'goodpint.db');
 
 /**

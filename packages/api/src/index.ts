@@ -7,6 +7,7 @@ import { audit, getCatalog, sqlite } from './db';
 import {
   ALLOW_UNVERIFIED_TOPUPS,
   CHECK_IN_DAILY_POINT_CAP,
+  HOST,
   MAX_JSON_BODY_BYTES,
   MIN_PASSWORD_LENGTH,
   NODE_ENV,
@@ -738,6 +739,14 @@ app.post('/api/staff/redeem', staffRedeemLimiter, (request, response) => {
 /** Points granted for a first review, and the most a user can farm per day. */
 const REVIEW_POINTS = 25;
 const REVIEW_DAILY_GRANT_CAP = 4;
+/**
+ * Most pubs one account may review for the first time per day.
+ *
+ * Separate from the points cap: even with no bonus on offer, each new pub id
+ * adds a row to the unauthenticated GET /api/reviews/ratings response, and pub
+ * ids are arbitrary client-supplied strings.
+ */
+const REVIEW_DAILY_NEW_CAP = 30;
 
 // All pub ratings as a map keyed by pub id — used to annotate the nearby list.
 app.get('/api/reviews/ratings', (_request, response) => {
@@ -790,14 +799,21 @@ app.post('/api/reviews', requireAuth, writeLimiter, (request, response) => {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const awardPoints = countRecentPointGrants(userId, since) < REVIEW_DAILY_GRANT_CAP;
 
-  const { summary, pointsAwarded } = addReview(
+  const { summary, pointsAwarded, rejected } = addReview(
     parsed.data.pubId,
     userId,
     parsed.data.rating,
     parsed.data.pubName,
     parsed.data.note,
-    { awardPoints },
+    { awardPoints, maxNewPerDay: REVIEW_DAILY_NEW_CAP },
   );
+
+  if (rejected === 'daily_new_limit') {
+    response.status(429).json({
+      error: `You can review up to ${REVIEW_DAILY_NEW_CAP} new pubs per day. Try again tomorrow.`,
+    });
+    return;
+  }
 
   const points = pointsAwarded ? addPoints(userId, REVIEW_POINTS) : getPoints(userId);
 
@@ -830,9 +846,9 @@ app.use(errorHandler);
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, HOST, () => {
   // eslint-disable-next-line no-console
-  console.log(`GoodPint API listening on http://localhost:${PORT}`);
+  console.log(`GoodPint API listening on http://${HOST}:${PORT}`);
   // eslint-disable-next-line no-console
   console.log('[config]', describeConfig());
 });
