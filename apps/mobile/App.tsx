@@ -16,7 +16,7 @@ import { PointsScreen } from './src/screens/PointsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { RedeemScreen } from './src/screens/RedeemScreen';
 import { WalletScreen } from './src/screens/WalletScreen';
-import { createOrder, getAppState, getRatings, getUserRatings, redeemReward, submitReview, topUpWallet } from './src/services/api';
+import { ApiError, createOrder, getAppState, getRatings, getUserRatings, redeemReward, submitReview, topUpWallet } from './src/services/api';
 import { colors } from './src/theme';
 import type { AppStatePayload, CartItem, FilterKey, OsmPub, RatingMap, TabKey, Transaction, Voucher, WalletState } from './src/types';
 import { fetchNearbyPubs } from './src/utils/pubs';
@@ -85,6 +85,8 @@ function MainApp() {
   const [userRatings, setUserRatings] = useState<Record<string, number>>({});
   const [route, setRoute] = useState<NestedRoute>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
+  // Guards the value-moving flows against a double tap sending two orders.
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(299);
   const [activeVoucher, setActiveVoucher] = useState<Voucher | null>(null);
 
@@ -284,58 +286,74 @@ function MainApp() {
     });
   };
 
-  const payForOrder = () => {
+  // Money moves only once the server says it did.
+  //
+  // These flows used to update the local balance, announce success, and *then*
+  // fire the request with its rejection swallowed. Anything the server refused —
+  // a stale balance, a rate limit, a pub that came from the map rather than our
+  // catalog — left the user looking at a confirmation and a debited balance for
+  // an order that did not exist. The server is the only authority on a balance,
+  // so nothing is shown until it has answered.
+  const payForOrder = async () => {
+    if (isSubmitting) return;
+
     if (cartTotal <= 0) {
       Alert.alert('Add a drink', 'Choose at least one drink before paying.');
       return;
     }
 
+    // A courtesy check so the common case fails fast and locally; the server
+    // enforces the real one against the authoritative balance.
     if (wallet.balance < cartTotal) {
       Alert.alert('Top up wallet', 'Add funds to your GoodPint Card before placing this order.');
       return;
     }
 
-    const pointsEarned = cart.reduce((total, item) => {
-      const drink = data.drinks.find((candidate) => candidate.id === item.drinkId);
-      return total + (drink?.points ?? 0) * item.quantity;
-    }, 0);
+    setIsSubmitting(true);
+    try {
+      const result = await createOrder({ venueId: selectedVenue.id, items: cart });
 
-    setWallet((currentWallet) => ({
-      ...currentWallet,
-      balance: Number((currentWallet.balance - cartTotal).toFixed(2)),
-    }));
-    setPoints((currentPoints) => currentPoints + pointsEarned);
-    setTransactions((currentTransactions) => [
-      nowTransaction(selectedVenue.name, -cartTotal),
-      ...currentTransactions,
-    ]);
-    setSwipeDirection(null);
-    setRoute(null);
-    setActiveTab('wallet');
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    // Reconcile with the server's authoritative points/wallet totals.
-    createOrder({ venueId: selectedVenue.id, items: cart })
-      .then((result) => {
-        setPoints(result.points);
-        setWallet((currentWallet) => ({ ...currentWallet, balance: result.walletBalance }));
-      })
-      .catch(() => undefined);
-    Alert.alert('Drink booked', `Your order at ${selectedVenue.name} is ready for pickup soon.`);
+      setPoints(result.points);
+      setWallet((currentWallet) => ({ ...currentWallet, balance: result.walletBalance }));
+      setTransactions((currentTransactions) => [
+        nowTransaction(selectedVenue.name, -cartTotal),
+        ...currentTransactions,
+      ]);
+      setSwipeDirection(null);
+      setRoute(null);
+      setActiveTab('wallet');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Drink booked', `Your order at ${selectedVenue.name} is ready for pickup soon.`);
+    } catch (error) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        'Order not placed',
+        error instanceof ApiError ? error.message : 'Something went wrong. Your card has not been charged.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const topUp = () => {
+  const topUp = async () => {
+    if (isSubmitting) return;
     const amount = 25;
 
-    setWallet((currentWallet) => ({
-      ...currentWallet,
-      balance: Number((currentWallet.balance + amount).toFixed(2)),
-    }));
-    setTransactions((currentTransactions) => [nowTransaction('Wallet top up', amount), ...currentTransactions]);
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    topUpWallet({ amount })
-      .then((result) => setWallet((currentWallet) => ({ ...currentWallet, balance: result.balance })))
-      .catch(() => undefined);
+    setIsSubmitting(true);
+    try {
+      const result = await topUpWallet({ amount });
+      setWallet((currentWallet) => ({ ...currentWallet, balance: result.balance }));
+      setTransactions((currentTransactions) => [nowTransaction('Wallet top up', amount), ...currentTransactions]);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        'Top up failed',
+        error instanceof ApiError ? error.message : 'Something went wrong. Your card has not been charged.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const inviteFriends = () => {

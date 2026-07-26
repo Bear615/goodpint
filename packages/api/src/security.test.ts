@@ -25,6 +25,7 @@ import {
   debitWallet,
   findIdempotentResponse,
   getPoints,
+  getVouchers,
   getWallet,
   normalizeCode,
   penceToPounds,
@@ -256,6 +257,26 @@ describe('vouchers', () => {
     const result = redeemVoucherByCode(voucher.code);
     assert.equal(result.ok, false);
     assert.equal(result.ok === false && result.reason, 'expired');
+  });
+
+  it('presents a lapsed voucher as expired rather than still usable', async () => {
+    const user = await makeUser();
+    const voucher = createVoucher(user.id, { id: 'r1', title: 'Free pint', points: 100 });
+    assert.equal(voucher.status, 'active');
+
+    sqlite
+      .prepare('UPDATE vouchers SET expires_at = ? WHERE code = ?')
+      .run(new Date(Date.now() - 1000).toISOString(), voucher.code);
+
+    // The stored status is still 'active' — nothing writes 'expired' — so the
+    // wallet would otherwise show a worthless voucher as redeemable.
+    const stored = sqlite.prepare('SELECT status FROM vouchers WHERE code = ?').get(voucher.code) as {
+      status: string;
+    };
+    assert.equal(stored.status, 'active');
+
+    const listed = getVouchers(user.id).find((candidate) => candidate.code === voucher.code);
+    assert.equal(listed?.status, 'expired');
   });
 
   it('reports an unknown code as not found', () => {

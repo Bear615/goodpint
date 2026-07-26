@@ -801,6 +801,17 @@ app.post('/api/reviews', requireAuth, writeLimiter, (request, response) => {
 
   const points = pointsAwarded ? addPoints(userId, REVIEW_POINTS) : getPoints(userId);
 
+  if (pointsAwarded) {
+    audit({
+      actor: 'user',
+      userId,
+      action: 'review.points_awarded',
+      detail: { pubId: parsed.data.pubId, pointsAwarded: REVIEW_POINTS },
+      requestId: request.requestId,
+      ip: clientIp(request),
+    });
+  }
+
   response.status(201).json({ pubId: parsed.data.pubId, ...summary, points });
 });
 

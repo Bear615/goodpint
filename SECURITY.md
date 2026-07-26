@@ -88,6 +88,15 @@ This is the part that matters most, and the part that generic hardening misses.
   a retry over a flaky mobile connection cannot place a second order.
 - **Prices always come from the server's catalog**, never from the request body.
 - Every movement of money or points is written to an append-only `audit_log`.
+- **The client no longer decides that a payment succeeded.** It used to debit the
+  local balance, announce "Drink booked", and then fire the request with its
+  rejection swallowed — so anything the server refused (a stale balance, a rate
+  limit, a pub discovered on the map rather than in our catalog) left the user
+  holding a confirmation for an order that did not exist. Nothing is shown until
+  the server has answered, and the balance shown is the one it returned.
+- **Voucher expiry is derived on read.** Nothing ever wrote the `expired` status,
+  so a lapsed voucher kept presenting itself as usable in the wallet and sent
+  people to a till that would refuse it.
 
 A note on concurrency: `node:sqlite` is synchronous, so a handler that never
 awaits between reading a balance and writing it was already safe from

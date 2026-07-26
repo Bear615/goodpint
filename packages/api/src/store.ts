@@ -201,11 +201,21 @@ function toVoucher(row: VoucherRow): Voucher {
     title: row.title,
     code: row.code,
     pointsSpent: row.points_spent,
-    status: row.status,
+    // Nothing ever writes the 'expired' status — expiry is a function of the
+    // clock, not an event anyone triggers. Deriving it on read means the wallet
+    // stops presenting a lapsed voucher as usable, rather than sending someone
+    // to a till that will refuse it.
+    status: row.status === 'active' && isPast(row.expires_at) ? 'expired' : row.status,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
     redeemedAt: row.redeemed_at,
   };
+}
+
+function isPast(iso: string | null): boolean {
+  if (!iso) return false;
+  const time = new Date(iso).getTime();
+  return Number.isFinite(time) && time < Date.now();
 }
 
 // Short, human-readable, hard-to-mistype code (no 0/O/1/I). Twelve characters
