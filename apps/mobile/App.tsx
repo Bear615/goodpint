@@ -137,6 +137,7 @@ function MainApp() {
 
   const handleSubmitReview = async (pubId: string, rating: number, pubName: string, note?: string) => {
     const prevUserRating = userRatings[pubId];
+    const previousRating = ratings[pubId] ?? { average: 0, count: 0 };
 
     // Optimistic update: if new review add to count, if update keep count.
     setUserRatings((current) => ({ ...current, [pubId]: rating }));
@@ -152,12 +153,27 @@ function MainApp() {
       return { ...current, [pubId]: { average, count } };
     });
 
-    submitReview({ pubId, rating, pubName, note })
-      .then((result) => {
-        setRatings((current) => ({ ...current, [pubId]: { average: result.average, count: result.count } }));
-        setPoints(result.points);
-      })
-      .catch(() => undefined);
+    // An optimistic rating is fine — it is display state, not money — but a
+    // rejection has to be undone rather than swallowed. Submissions can now be
+    // refused (the daily new-pub cap, or the write rate limit), and leaving the
+    // optimistic value in place would show a rating that was never saved.
+    try {
+      const result = await submitReview({ pubId, rating, pubName, note });
+      setRatings((current) => ({ ...current, [pubId]: { average: result.average, count: result.count } }));
+      setPoints(result.points);
+    } catch (error) {
+      setUserRatings((current) => {
+        const reverted = { ...current };
+        if (prevUserRating === undefined) delete reverted[pubId];
+        else reverted[pubId] = prevUserRating;
+        return reverted;
+      });
+      setRatings((current) => ({ ...current, [pubId]: previousRating }));
+      Alert.alert(
+        'Review not saved',
+        error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
+      );
+    }
   };
 
   useEffect(() => {

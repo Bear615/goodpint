@@ -1,5 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getMe, login as loginRequest, logout as logoutRequest, signup as signupRequest } from '../services/api';
+import {
+  getMe,
+  login as loginRequest,
+  logout as logoutRequest,
+  setUnauthorizedHandler,
+  signup as signupRequest,
+} from '../services/api';
 import { clearToken, getToken, setToken } from '../utils/authToken';
 import type { User } from '../types';
 
@@ -45,6 +51,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       mounted = false;
     };
+  }, []);
+
+  // A session can die mid-use — it expired, it was revoked, or the account was
+  // signed out everywhere. The token is only validated at launch, so without
+  // this the app sits in an "authenticated" state making calls that all 401,
+  // showing empty screens instead of a sign-in prompt. Any 401 now drops the
+  // dead credential and returns to the sign-in screen.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      void clearToken();
+      setUser(null);
+      setStatus('unauthenticated');
+    });
+    return () => setUnauthorizedHandler(null);
   }, []);
 
   const value = useMemo<AuthContextValue>(

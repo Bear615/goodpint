@@ -156,4 +156,10 @@ Honest list of what is *not* solved:
   voucher to the venue that issued it would be stronger.
 - **Signup reveals whether an email is registered.** A signup form has to tell the
   user their address is taken; the rate limiter is the mitigation.
-- **No automated dependency scanning** in CI.
+- **No automated dependency scanning** in CI (in fact, no CI at all yet).
+- **The "£5 Off Tab" reward cannot be applied to anything.** It is redeemable for
+  750 points and issues a voucher, but the order path has no notion of a
+  discount, so the points buy nothing. Not exploitable by an attacker — it just
+  loses value for the user — but it is a real hole in the rewards flow.
+- **Vouchers are not bound to the venue that issued them**, and the till endpoint
+  has no per-venue voucher scoping even when per-venue keys are configured.
