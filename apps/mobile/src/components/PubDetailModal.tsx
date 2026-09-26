@@ -4,9 +4,12 @@ import {
   Animated, Modal, Pressable, ScrollView, StyleSheet,
   Text, TextInput, useWindowDimensions, View,
 } from 'react-native';
-import { ArrowLeft, MapPin, MessageSquarePlus, Navigation, Star, X } from 'lucide-react-native';
+import { ArrowLeft, Beer, MapPin, Navigation, PenLine, X } from 'lucide-react-native';
 import { colors, font, radii } from '../theme';
 import { StarRatingReview, CONFETTI_COLORS } from './StarRatingReview';
+import { RatingSummary } from './RatingSummary';
+import { StarGlyph, StarRow } from './RatingStars';
+import { GoldButton } from './GoldButton';
 import { getPubReviews } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import type { OsmPub, PubRating, PubReview } from '../types';
@@ -213,14 +216,6 @@ export function PubDetailModal({ pub, rating, userRating, onClose, onSubmitRevie
                 <View style={styles.headerCopy}>
                   <Text style={styles.pubName} numberOfLines={2}>{pub.name}</Text>
                   <View style={styles.metaRow}>
-                    <Star size={13} color={colors.gold} fill={rating && rating.count > 0 ? colors.gold : 'transparent'} />
-                    <Text style={styles.metaText}>
-                      {rating && rating.count > 0
-                        ? `${rating.average.toFixed(1)} · ${rating.count} ${rating.count === 1 ? 'review' : 'reviews'}`
-                        : 'No reviews yet'}
-                    </Text>
-                  </View>
-                  <View style={styles.metaRow}>
                     <Navigation size={13} color={colors.gold} />
                     <Text style={styles.metaText}>{milesText}</Text>
                   </View>
@@ -236,20 +231,34 @@ export function PubDetailModal({ pub, rating, userRating, onClose, onSubmitRevie
                 </Pressable>
               </View>
 
+              <View style={styles.summaryWrap}>
+                <RatingSummary rating={rating} reviews={reviews} />
+              </View>
+
               {/* CTAs */}
               <View style={styles.ctaRow}>
                 <Pressable style={styles.reviewCta} onPress={openRatePhase}>
-                  <MessageSquarePlus size={16} color={colors.gold} strokeWidth={2} />
+                  <PenLine size={16} color={colors.gold} strokeWidth={2} />
                   <Text style={styles.reviewCtaText}>
-                    {userRating ? 'Update your review' : 'Leave your own review'}
+                    {userRating ? 'Update your review' : 'Rate this pub'}
                   </Text>
+                  {userRating ? (
+                    <View style={styles.yourChip}>
+                      <StarGlyph size={11} />
+                      <Text style={styles.yourChipText}>{userRating.toFixed(1)}</Text>
+                    </View>
+                  ) : null}
                 </Pressable>
                 <Pressable style={styles.orderCta} onPress={() => { close(); onOpenBuy(pub.id, pub.name); }}>
-                  <Text style={styles.orderCtaText}>Order a Drink</Text>
+                  <Beer size={15} color={colors.textMuted} strokeWidth={2} />
+                  <Text style={styles.orderCtaText}>Order a drink</Text>
                 </Pressable>
               </View>
 
-              <View style={styles.divider} />
+              <View style={styles.sectionHead}>
+                <Text style={styles.sectionTitle}>Reviews</Text>
+                {reviews.length > 0 ? <Text style={styles.sectionCount}>{reviews.length}</Text> : null}
+              </View>
 
               {/* Reviews list */}
               <ScrollView
@@ -281,28 +290,29 @@ export function PubDetailModal({ pub, rating, userRating, onClose, onSubmitRevie
                     .map((r) => {
                       const isOwn = r.isMine;
                       return (
-                        <View key={r.id} style={styles.reviewItem}>
+                        <View key={r.id} style={[styles.reviewItem, isOwn && styles.reviewItemOwn]}>
                           <View style={styles.reviewItemHead}>
-                            <View style={styles.reviewStars}>
-                              {[1, 2, 3, 4, 5].map((n) => (
-                                <Star
-                                  key={n}
-                                  size={13}
-                                  color={colors.gold}
-                                  fill={r.rating >= n - 0.25 ? colors.gold : 'transparent'}
-                                />
-                              ))}
+                            <View style={[styles.avatar, isOwn && styles.avatarOwn]}>
+                              {isOwn
+                                ? <Text style={styles.avatarText}>You</Text>
+                                : <Beer size={15} color={colors.textMuted} strokeWidth={2} />}
                             </View>
-                            <Text style={styles.reviewTime}>{relativeTime(r.createdAt)}</Text>
+                            <View style={styles.reviewMeta}>
+                              <Text style={styles.reviewAuthor}>{isOwn ? 'Your review' : 'A regular'}</Text>
+                              <Text style={styles.reviewTime}>{relativeTime(r.createdAt)}</Text>
+                            </View>
+                            <View style={styles.reviewScore}>
+                              <StarRow value={r.rating} size={12} gap={1.5} />
+                              <Text style={styles.reviewScoreText}>{r.rating.toFixed(1)}</Text>
+                            </View>
                           </View>
                           {r.note ? <Text style={styles.reviewNote}>{r.note}</Text> : null}
-                          {isOwn ? <Text style={styles.reviewOwn}>· your review</Text> : null}
                         </View>
                       );
                     })
                 ) : (
                   <View style={styles.emptyReviews}>
-                    <Text style={styles.emptyText}>No one has written a review yet.</Text>
+                    <Text style={styles.emptyText}>No written reviews yet</Text>
                     <Text style={styles.emptyHint}>If you've had a pint here, leave a few words.</Text>
                   </View>
                 )}
@@ -322,15 +332,11 @@ export function PubDetailModal({ pub, rating, userRating, onClose, onSubmitRevie
               </View>
 
               <View style={styles.reviewArea}>
-                {showYay ? (
-                  <Text style={styles.yay}>Yay!</Text>
-                ) : hasJustRated ? (
-                  <Text style={styles.successText}>Success!</Text>
-                ) : (
-                  <Text style={styles.reviewLabel}>
-                    {userRating ? 'Drag to update your rating' : 'Rate this pub'}
-                  </Text>
-                )}
+                <Text style={[styles.reviewLabel, showYay && styles.yay]}>
+                  {showYay
+                    ? 'Top marks!'
+                    : userRating ? 'Update your rating' : 'How was your pint?'}
+                </Text>
                 <StarRatingReview
                   key={pub.id}
                   initialStars={userRating ?? 0}
@@ -341,19 +347,24 @@ export function PubDetailModal({ pub, rating, userRating, onClose, onSubmitRevie
 
               {hasJustRated ? (
                 <View style={styles.noteArea}>
+                  <View style={styles.noteHead}>
+                    <Text style={styles.noteLabel}>Add a note</Text>
+                    <Text style={styles.noteCounter}>{note.length}/280</Text>
+                  </View>
                   <TextInput
                     style={styles.noteInput}
                     value={note}
                     onChangeText={setNote}
-                    placeholder="Add a note (optional)"
+                    placeholder="What stood out? The pour, the vibe, the staff… (optional)"
                     placeholderTextColor={colors.textSubtle}
                     multiline
                     maxLength={280}
                     selectionColor={colors.gold}
                   />
-                  <Pressable style={styles.submitBtn} onPress={handleSubmit}>
-                    <Text style={styles.submitText}>Submit</Text>
-                  </Pressable>
+                  <GoldButton
+                    label={userRating ? 'Update review' : 'Post review'}
+                    onPress={handleSubmit}
+                  />
                 </View>
               ) : null}
             </>
@@ -439,11 +450,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
     marginTop: 2,
   },
-  ctaRow: {
+  summaryWrap: {
     marginTop: 18,
+  },
+  ctaRow: {
+    marginTop: 14,
+    flexDirection: 'row',
     gap: 10,
   },
   reviewCta: {
+    flex: 1.4,
     height: 48,
     borderRadius: radii.sm,
     borderWidth: 1,
@@ -459,29 +475,60 @@ const styles = StyleSheet.create({
     fontFamily: font.medium,
     fontSize: 14,
   },
+  yourChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(244,200,74,0.16)',
+  },
+  yourChipText: {
+    color: colors.goldBright,
+    fontFamily: font.medium,
+    fontSize: 11,
+  },
   orderCta: {
-    height: 44,
+    flex: 1,
+    height: 48,
     borderRadius: radii.sm,
     borderWidth: 1,
     borderColor: colors.border,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 7,
   },
   orderCtaText: {
     color: colors.textMuted,
     fontFamily: font.regular,
     fontSize: 14,
   },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    marginVertical: 20,
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    color: colors.textSubtle,
+    fontFamily: font.medium,
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1.3,
+  },
+  sectionCount: {
+    color: colors.textSubtle,
+    fontFamily: font.regular,
+    fontSize: 12,
   },
   reviewsList: {
     flex: 1,
   },
   reviewsListContent: {
-    gap: 16,
+    gap: 10,
     paddingBottom: 8,
   },
   submittedBanner: {
@@ -503,21 +550,55 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   reviewItem: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: radii.md,
+    padding: 14,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
     backgroundColor: colors.panelSoft,
-    gap: 9,
+    gap: 10,
+  },
+  reviewItemOwn: {
+    borderColor: 'rgba(244,200,74,0.28)',
+    backgroundColor: 'rgba(244,200,74,0.05)',
   },
   reviewItemHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 10,
   },
-  reviewStars: {
-    flexDirection: 'row',
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  avatarOwn: {
+    backgroundColor: colors.gold,
+  },
+  avatarText: {
+    color: '#080808',
+    fontFamily: font.medium,
+    fontSize: 11,
+  },
+  reviewMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  reviewAuthor: {
+    color: colors.text,
+    fontFamily: font.medium,
+    fontSize: 14,
+  },
+  reviewScore: {
+    alignItems: 'flex-end',
     gap: 3,
+  },
+  reviewScoreText: {
+    color: colors.textMuted,
+    fontFamily: font.medium,
+    fontSize: 11,
   },
   reviewTime: {
     color: colors.textSubtle,
@@ -529,11 +610,6 @@ const styles = StyleSheet.create({
     fontFamily: font.regular,
     fontSize: 14,
     lineHeight: 21,
-  },
-  reviewOwn: {
-    color: colors.gold,
-    fontFamily: font.regular,
-    fontSize: 12,
   },
   emptyReviews: {
     paddingVertical: 32,
@@ -572,33 +648,37 @@ const styles = StyleSheet.create({
   },
   reviewArea: {
     alignItems: 'center',
-    minHeight: 110,
-    marginTop: 24,
+    marginTop: 28,
   },
   reviewLabel: {
     color: colors.textSubtle,
-    fontFamily: font.regular,
+    fontFamily: font.medium,
     fontSize: 12,
     textTransform: 'uppercase',
     letterSpacing: 1.3,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   yay: {
     color: colors.success,
-    fontFamily: font.medium,
-    fontSize: 30,
-    letterSpacing: 2,
-    marginBottom: 4,
-  },
-  successText: {
-    color: colors.success,
-    fontFamily: font.medium,
-    fontSize: 15,
-    marginBottom: 4,
   },
   noteArea: {
-    marginTop: 16,
-    gap: 12,
+    marginTop: 22,
+    gap: 10,
+  },
+  noteHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  noteLabel: {
+    color: colors.textMuted,
+    fontFamily: font.medium,
+    fontSize: 13,
+  },
+  noteCounter: {
+    color: colors.textSubtle,
+    fontFamily: font.regular,
+    fontSize: 12,
   },
   noteInput: {
     borderWidth: 1,
@@ -610,20 +690,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    minHeight: 72,
+    minHeight: 88,
     textAlignVertical: 'top',
-  },
-  submitBtn: {
-    height: 48,
-    borderRadius: radii.sm,
-    backgroundColor: colors.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitText: {
-    color: '#000',
-    fontFamily: font.medium,
-    fontSize: 15,
-    letterSpacing: 0.3,
   },
 });
