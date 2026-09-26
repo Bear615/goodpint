@@ -9,7 +9,6 @@ import { colors, font, radii } from '../theme';
 import { StarRatingReview, CONFETTI_COLORS } from './StarRatingReview';
 import { RatingSummary } from './RatingSummary';
 import { StarGlyph, StarRow } from './RatingStars';
-import { GoldButton } from './GoldButton';
 import { getPubReviews } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import type { OsmPub, PubRating, PubReview } from '../types';
@@ -361,10 +360,9 @@ export function PubDetailModal({ pub, rating, userRating, onClose, onSubmitRevie
                     maxLength={280}
                     selectionColor={colors.gold}
                   />
-                  <GoldButton
-                    label={userRating ? 'Update review' : 'Post review'}
-                    onPress={handleSubmit}
-                  />
+                  <Pressable style={styles.submitBtn} onPress={handleSubmit}>
+                    <Text style={styles.submitText}>{userRating ? 'Update review' : 'Post review'}</Text>
+                  </Pressable>
                 </View>
               ) : null}
             </>
@@ -447,7 +445,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.md,
-    backgroundColor: 'rgba(255,255,255,0.06)',
     marginTop: 2,
   },
   summaryWrap: {
@@ -638,7 +635,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.md,
-    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   rateTitle: {
     flex: 1,
@@ -692,5 +688,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     minHeight: 88,
     textAlignVertical: 'top',
+  },
+  submitBtn: {
+    height: 52,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitText: {
+    color: colors.gold,
+    fontFamily: font.medium,
+    fontSize: 16,
+    letterSpacing: 0.3,
   },
 });
