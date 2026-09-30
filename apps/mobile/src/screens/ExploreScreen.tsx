@@ -267,9 +267,9 @@ const styles = StyleSheet.create({
   },
   brand: {
     color: colors.text,
-    fontFamily: font.regular,
-    fontSize: 31,
-    letterSpacing: 0,
+    fontFamily: font.bold,
+    fontSize: 30,
+    letterSpacing: -1,
   },
   brandGold: { color: colors.gold },
   brandMeta: {

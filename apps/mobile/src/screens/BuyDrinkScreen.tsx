@@ -166,8 +166,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 19,
+    letterSpacing: -0.3,
   },
   venueName: {
     marginTop: 7,
@@ -248,8 +249,9 @@ const styles = StyleSheet.create({
   quantity: {
     minWidth: 15,
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 18,
+    letterSpacing: -0.3,
     textAlign: 'center',
   },
   orderRow: {
@@ -266,8 +268,9 @@ const styles = StyleSheet.create({
   },
   orderQuantity: {
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 18,
+    letterSpacing: -0.3,
     width: 28,
     textAlign: 'center',
   },
@@ -297,13 +300,15 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 17,
+    letterSpacing: -0.3,
   },
   totalValue: {
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 18,
+    letterSpacing: -0.3,
   },
   payPill: {
     paddingHorizontal: 9,

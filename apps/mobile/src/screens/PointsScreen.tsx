@@ -174,8 +174,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 18,
+    letterSpacing: -0.3,
   },
   history: {
     color: colors.gold,
@@ -198,8 +199,8 @@ const styles = StyleSheet.create({
   points: {
     color: colors.gold,
     fontFamily: font.bold,
-    fontSize: 50,
-    letterSpacing: 0,
+    fontSize: 52,
+    letterSpacing: -2,
   },
   coin: {
     width: 40,
@@ -274,8 +275,9 @@ const styles = StyleSheet.create({
     marginTop: 26,
     marginBottom: 10,
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 17,
+    letterSpacing: -0.3,
   },
   earningRow: {
     minHeight: 54,

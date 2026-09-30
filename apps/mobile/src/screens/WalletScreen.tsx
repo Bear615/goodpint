@@ -120,8 +120,9 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 16,
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 24,
+    letterSpacing: -0.6,
   },
   walletCard: {
     minHeight: 170,
@@ -149,8 +150,9 @@ const styles = StyleSheet.create({
   balance: {
     marginTop: 28,
     color: colors.gold,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 30,
+    letterSpacing: -1,
   },
   cardBottom: {
     marginTop: 24,
@@ -175,8 +177,9 @@ const styles = StyleSheet.create({
     marginTop: 28,
     marginBottom: 12,
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 18,
+    letterSpacing: -0.3,
   },
   passList: {
     gap: 10,

@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   eyebrow: { color: colors.gold, fontFamily: font.medium, fontSize: 13 },
-  title: { marginTop: 3, color: colors.text, fontFamily: font.medium, fontSize: 25 },
+  title: { marginTop: 3, color: colors.text, fontFamily: font.semibold, fontSize: 25, letterSpacing: -0.6 },
   headerButton: {
     width: 46, height: 46, borderRadius: 23,
     alignItems: 'center', justifyContent: 'center',
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   overviewTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   overviewCopy: { flex: 1 },
   overviewMeta: { color: colors.textMuted, fontFamily: font.regular, fontSize: 13 },
-  overviewTitle: { marginTop: 6, color: colors.text, fontFamily: font.medium, fontSize: 22 },
+  overviewTitle: { marginTop: 6, color: colors.text, fontFamily: font.semibold, fontSize: 22, letterSpacing: -0.6 },
   routeBadge: {
     height: 32, paddingHorizontal: 10, borderRadius: 16,
     borderWidth: 1, borderColor: colors.borderStrong,
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
     marginTop: 24, marginBottom: 12,
     flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
   },
-  sectionTitle: { color: colors.text, fontFamily: font.medium, fontSize: 18 },
+  sectionTitle: { color: colors.text, fontFamily: font.semibold, fontSize: 18, letterSpacing: -0.3 },
   sectionMeta: { color: colors.textSubtle, fontFamily: font.regular, fontSize: 12 },
   timeline: { gap: 12 },
   stopRow: { flexDirection: 'row', gap: 12 },
@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(244,200,74,0.06)',
     marginBottom: 4,
   },
-  emptyTitle: { color: colors.text, fontFamily: font.medium, fontSize: 18 },
+  emptyTitle: { color: colors.text, fontFamily: font.semibold, fontSize: 18, letterSpacing: -0.3 },
   emptyHint: { color: colors.textMuted, fontFamily: font.regular, fontSize: 13, textAlign: 'center' },
   emptyCommandRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' },
   // group tab

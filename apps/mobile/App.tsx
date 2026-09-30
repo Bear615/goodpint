@@ -1,3 +1,10 @@
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  useFonts,
+} from '@expo-google-fonts/inter';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -34,6 +41,19 @@ function nowTransaction(title: string, amount: number): Transaction {
 
 // Top-level: provide auth and gate the rest of the app behind sign-in.
 export default function App() {
+  const [fontsLoaded, fontError] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  // Hold on the plain background until Inter is ready so text never reflows
+  // from the system font. If loading fails, carry on with the fallback.
+  if (!fontsLoaded && !fontError) {
+    return <View style={styles.loading} />;
+  }
+
   return (
     <SafeAreaProvider>
       <AuthProvider>

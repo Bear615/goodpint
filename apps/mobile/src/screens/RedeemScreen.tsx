@@ -122,8 +122,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 18,
+    letterSpacing: -0.3,
   },
   headerSpacer: {
     width: 42,
@@ -184,8 +185,9 @@ const styles = StyleSheet.create({
   },
   fallback: {
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 22,
+    letterSpacing: -0.6,
   },
   codeHint: {
     marginTop: 14,
@@ -202,8 +204,9 @@ const styles = StyleSheet.create({
   },
   points: {
     color: colors.gold,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 23,
+    letterSpacing: -0.6,
   },
   expiryRow: {
     marginTop: 14,

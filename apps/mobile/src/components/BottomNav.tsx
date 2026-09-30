@@ -17,7 +17,7 @@ const tabs: Array<{ id: TabKey; label: string; Icon: IconComponent }> = [
 
 // The marker is a short bar that sits on the top rule and slides to whichever
 // tab is active. It is the only moving part, so it is the only gold on the bar.
-const MARKER_WIDTH = 18;
+const MARKER_WIDTH = 20;
 
 interface BottomNavProps {
   activeTab: TabKey;
@@ -91,9 +91,11 @@ const styles = StyleSheet.create({
   },
   marker: {
     position: 'absolute',
-    top: -1,
+    top: 0,
     width: MARKER_WIDTH,
-    height: 2,
+    height: 3,
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
     backgroundColor: colors.gold,
   },
   tab: {
@@ -108,12 +110,12 @@ const styles = StyleSheet.create({
   label: {
     marginTop: 5,
     fontFamily: font.regular,
-    fontSize: 10.5,
-    letterSpacing: 0.2,
+    fontSize: 11,
+    letterSpacing: -0.1,
     color: colors.textSubtle,
   },
   labelActive: {
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     color: colors.text,
   },
 });
