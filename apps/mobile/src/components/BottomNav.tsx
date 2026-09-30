@@ -1,19 +1,23 @@
 import type { ComponentType } from 'react';
-import { useEffect, useRef } from 'react';
-import { CalendarDays, Search, Star, UserRound, WalletCards } from 'lucide-react-native';
-import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
-import { colors, font, radii } from '../theme';
+import { useEffect, useRef, useState } from 'react';
+import { Beer, MapPinned, Route, UserRound, WalletMinimal } from 'lucide-react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, font } from '../theme';
 import type { TabKey } from '../types';
 
 type IconComponent = ComponentType<{ color?: string; size?: number; strokeWidth?: number }>;
 
 const tabs: Array<{ id: TabKey; label: string; Icon: IconComponent }> = [
-  { id: 'explore', label: 'Explore', Icon: Search },
-  { id: 'points', label: 'Points', Icon: Star },
-  { id: 'plan', label: 'Plan', Icon: CalendarDays },
-  { id: 'wallet', label: 'Wallet', Icon: WalletCards },
-  { id: 'profile', label: 'Profile', Icon: UserRound },
+  { id: 'explore', label: 'Explore', Icon: MapPinned },
+  { id: 'points', label: 'Points', Icon: Beer },
+  { id: 'plan', label: 'Plan', Icon: Route },
+  { id: 'wallet', label: 'Wallet', Icon: WalletMinimal },
+  { id: 'profile', label: 'You', Icon: UserRound },
 ];
+
+// The marker is a short bar that sits on the top rule and slides to whichever
+// tab is active. It is the only moving part, so it is the only gold on the bar.
+const MARKER_WIDTH = 18;
 
 interface BottomNavProps {
   activeTab: TabKey;
@@ -21,73 +25,55 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
-  const tabAnims = useRef(tabs.map((t) => new Animated.Value(t.id === activeTab ? 1 : 0))).current;
+  const [tabWidth, setTabWidth] = useState(0);
+  const activeIndex = Math.max(tabs.findIndex((tab) => tab.id === activeTab), 0);
+  const position = useRef(new Animated.Value(activeIndex)).current;
 
   useEffect(() => {
-    tabs.forEach((tab, i) => {
-      Animated.timing(tabAnims[i], {
-        toValue: tab.id === activeTab ? 1 : 0,
-        duration: 230,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start();
-    });
-  }, [activeTab, tabAnims]);
+    Animated.spring(position, {
+      toValue: activeIndex,
+      speed: 18,
+      bounciness: 4,
+      useNativeDriver: Platform.OS !== 'web',
+    }).start();
+  }, [activeIndex, position]);
+
+  const markerX = Animated.multiply(position, tabWidth);
 
   return (
-    <View style={styles.wrap}>
-      {tabs.map(({ id, label, Icon }, index) => {
-        const anim = tabAnims[index];
+    <View
+      accessibilityRole="tablist"
+      style={styles.bar}
+      onLayout={(event) => setTabWidth(event.nativeEvent.layout.width / tabs.length)}
+    >
+      {tabWidth > 0 ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.marker,
+            { left: (tabWidth - MARKER_WIDTH) / 2, transform: [{ translateX: markerX }] },
+          ]}
+        />
+      ) : null}
 
-        const activeOpacity = anim;
-        const inactiveOpacity = anim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
-
-        const iconScale = anim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] });
-        const pillOpacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
-        const pillScale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1] });
-        const topLineWidth = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 20] });
-        const labelColor = anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [colors.textMuted, colors.gold],
-        });
+      {tabs.map(({ id, label, Icon }) => {
+        const active = id === activeTab;
+        const tint = active ? colors.text : colors.textSubtle;
 
         return (
           <Pressable
             key={id}
             accessibilityLabel={label}
-            accessibilityRole="button"
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
             onPress={() => onTabChange(id)}
-            style={styles.item}
+            style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
             testID={`tab-${id}`}
           >
-            <Animated.View style={[styles.topLine, { width: topLineWidth, opacity: anim }]} />
-
-            <View style={styles.iconWrap}>
-              <Animated.View
-                style={[
-                  styles.iconPill,
-                  { opacity: pillOpacity, transform: [{ scale: pillScale }] },
-                ]}
-              />
-              <Animated.View
-                style={[StyleSheet.absoluteFill, styles.iconCenter, { opacity: inactiveOpacity }]}
-              >
-                <Icon color={colors.textMuted} size={22} strokeWidth={1.8} />
-              </Animated.View>
-              <Animated.View
-                style={[
-                  StyleSheet.absoluteFill,
-                  styles.iconCenter,
-                  { opacity: activeOpacity, transform: [{ scale: iconScale }] },
-                ]}
-              >
-                <Icon color={colors.gold} size={22} strokeWidth={2.3} />
-              </Animated.View>
-            </View>
-
-            <Animated.Text style={[styles.label, { color: labelColor }]} numberOfLines={1}>
+            <Icon color={tint} size={21} strokeWidth={active ? 2 : 1.6} />
+            <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1}>
               {label}
-            </Animated.Text>
+            </Text>
           </Pressable>
         );
       })}
@@ -96,57 +82,38 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    position: 'absolute',
-    left: 18,
-    right: 18,
-    bottom: 12,
-    height: 76,
-    paddingHorizontal: 6,
-    paddingTop: 0,
-    paddingBottom: 10,
+  bar: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'rgba(8,9,10,0.96)',
+    height: 62,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: '#0A0B0C',
   },
-  item: {
-    flex: 1,
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 2,
-  },
-  topLine: {
+  marker: {
     position: 'absolute',
-    top: 0,
+    top: -1,
+    width: MARKER_WIDTH,
     height: 2,
-    borderRadius: 1,
     backgroundColor: colors.gold,
   },
-  iconWrap: {
-    width: 44,
-    height: 32,
+  tab: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    paddingTop: 2,
   },
-  iconPill: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: radii.md,
-    backgroundColor: colors.goldSoft,
-  },
-  iconCenter: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  pressed: {
+    opacity: 0.55,
   },
   label: {
-    marginTop: 3,
+    marginTop: 5,
     fontFamily: font.regular,
-    fontSize: 11,
-    textAlign: 'center',
+    fontSize: 10.5,
+    letterSpacing: 0.2,
+    color: colors.textSubtle,
+  },
+  labelActive: {
+    fontFamily: font.medium,
+    color: colors.text,
   },
 });
