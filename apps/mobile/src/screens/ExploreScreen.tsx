@@ -231,7 +231,7 @@ export function ExploreScreen({
           pressedScale={0.95}
         >
           <View style={styles.pointsChip}>
-            <Zap color={colors.gold} size={14} fill={colors.gold} />
+            <Zap color={colors.gold} size={18} fill={colors.gold} />
             <Text style={styles.pointsChipText}>{formatPoints(points)}</Text>
           </View>
         </PressableScale>
@@ -433,19 +433,16 @@ const styles = StyleSheet.create({
   },
   pointsChip: {
     height: 36,
-    paddingHorizontal: 12,
-    borderRadius: 18,
+    paddingLeft: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(244,200,74,0.28)',
-    backgroundColor: colors.goldSoft,
   },
   pointsChipText: {
     color: colors.gold,
     fontFamily: font.semibold,
-    fontSize: 14,
+    fontSize: 17,
+    letterSpacing: -0.3,
   },
   searchRow: {
     height: 48,
