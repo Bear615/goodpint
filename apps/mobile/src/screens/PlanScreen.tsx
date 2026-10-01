@@ -79,7 +79,7 @@ export function PlanScreen({ trips, venues, onInviteFriends, onAddStop, onOpenBu
 
         <SectionCard style={styles.emptyCard}>
           <View style={styles.emptyIcon}>
-            <MapPinned color={colors.gold} size={26} strokeWidth={2} />
+            <MapPinned color={colors.gold} size={34} strokeWidth={1.8} />
           </View>
           <Text style={styles.emptyTitle}>No trips yet</Text>
           <Text style={styles.emptyHint}>Plan your first GoodPint night out and invite your group.</Text>
@@ -395,10 +395,8 @@ const styles = StyleSheet.create({
   // empty state
   emptyCard: { padding: 24, alignItems: 'center', gap: 10 },
   emptyIcon: {
-    width: 56, height: 56, borderRadius: 28,
+    width: 56, height: 56,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: colors.borderStrong,
-    backgroundColor: 'rgba(244,200,74,0.06)',
     marginBottom: 4,
   },
   emptyTitle: { color: colors.text, fontFamily: font.semibold, fontSize: 18, letterSpacing: -0.3 },

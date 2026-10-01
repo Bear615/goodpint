@@ -75,7 +75,7 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onOpenRedee
             <Text style={styles.subtitle}>GoodPint Points</Text>
           </View>
           <View style={styles.coin}>
-            <Beer color={colors.gold} size={22} strokeWidth={2.4} />
+            <Beer color={colors.gold} size={30} strokeWidth={2} />
           </View>
         </View>
 
@@ -119,7 +119,7 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onOpenRedee
           return (
             <View key={rule.id} style={[styles.earningRow, index > 0 && styles.rowDivider]}>
               <View style={styles.ruleIcon}>
-                <Icon color={colors.gold} size={18} strokeWidth={2.2} />
+                <Icon color={colors.gold} size={20} strokeWidth={2} />
               </View>
               <Text style={styles.ruleLabel}>{rule.label}</Text>
               <Text style={styles.rulePoints}>+{rule.points} pts</Text>
@@ -153,7 +153,7 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onOpenRedee
       <SectionCard>
         <View style={styles.goldBoost}>
           <View style={styles.giftIcon}>
-            <Gift color={colors.gold} size={24} strokeWidth={2.4} />
+            <Gift color={colors.gold} size={28} strokeWidth={2} />
           </View>
           <View style={styles.goldBoostCopy}>
             <Text style={styles.goldBoostTitle}>{topTier ? `${topTier.title} unlocks richer rewards` : 'Top tier unlocks richer rewards'}</Text>
@@ -205,12 +205,8 @@ const styles = StyleSheet.create({
   coin: {
     width: 40,
     height: 40,
-    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: 'rgba(244,200,74,0.08)',
   },
   subtitle: {
     marginTop: -4,
@@ -293,12 +289,8 @@ const styles = StyleSheet.create({
   ruleIcon: {
     width: 28,
     height: 28,
-    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: 'rgba(244,200,74,0.06)',
   },
   ruleLabel: {
     flex: 1,
@@ -366,12 +358,8 @@ const styles = StyleSheet.create({
   giftIcon: {
     width: 46,
     height: 46,
-    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: 'rgba(244,200,74,0.06)',
   },
   goldBoostCopy: {
     flex: 1,

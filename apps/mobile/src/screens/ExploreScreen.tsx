@@ -179,7 +179,7 @@ export function ExploreScreen({
             >
               <View style={styles.pubCard}>
                 <View style={styles.pubIconWrap}>
-                  <Beer color={colors.gold} size={20} strokeWidth={2.2} />
+                  <Beer color={colors.gold} size={24} strokeWidth={2} />
                 </View>
                 <View style={styles.pubText}>
                   <Text style={styles.pubName} numberOfLines={1}>{pub.name}</Text>
@@ -296,7 +296,7 @@ export function ExploreScreen({
         {!mapReady && locationStatus !== 'denied' ? (
           <View style={styles.mapPlaceholder} pointerEvents="none">
             <View style={styles.mapPlaceholderIcon}>
-              <MapPin color={mapFailed ? colors.textMuted : colors.gold} size={20} strokeWidth={2} />
+              <MapPin color={mapFailed ? colors.textMuted : colors.gold} size={26} strokeWidth={1.8} />
             </View>
             <Text style={styles.mapPlaceholderText}>
               {mapFailed ? 'Map unavailable right now'
@@ -309,7 +309,7 @@ export function ExploreScreen({
         {locationStatus === 'denied' && (
           <View style={styles.mapOverlay}>
             <View style={styles.mapPlaceholderIcon}>
-              <MapPinOff color={colors.textMuted} size={20} strokeWidth={2} />
+              <MapPinOff color={colors.textMuted} size={26} strokeWidth={1.8} />
             </View>
             <Text style={styles.mapOverlayText}>Location access needed to find pubs nearby</Text>
           </View>
@@ -342,7 +342,7 @@ export function ExploreScreen({
           style={styles.promo}
         >
           <View style={styles.promoIcon}>
-            <Zap color="#141006" size={20} fill="#141006" />
+            <Zap color={colors.gold} size={26} fill={colors.gold} />
           </View>
           <View style={styles.promoCopy}>
             <Text style={styles.promoTitle}>Points & rewards</Text>
@@ -380,7 +380,7 @@ function EmptyState({ icon: Icon, title, body, actionLabel, onAction }: EmptySta
   return (
     <View style={styles.emptyCard}>
       <View style={styles.emptyIcon}>
-        <Icon color={colors.textMuted} size={20} strokeWidth={1.9} />
+        <Icon color={colors.textMuted} size={24} strokeWidth={1.8} />
       </View>
       <View style={styles.emptyCopy}>
         <Text style={styles.emptyTitle}>{title}</Text>
@@ -533,12 +533,8 @@ const styles = StyleSheet.create({
   mapPlaceholderIcon: {
     width: 44,
     height: 44,
-    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.panelRaised,
   },
   mapPlaceholderText: {
     color: colors.textSubtle,
@@ -612,10 +608,8 @@ const styles = StyleSheet.create({
   emptyIcon: {
     width: 40,
     height: 40,
-    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.panelSoft,
   },
   emptyCopy: { flex: 1, gap: 2 },
   emptyTitle: {
@@ -658,7 +652,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
   },
   skeletonCard: { height: 66 },
-  skeletonBlock: { backgroundColor: colors.panelSoft },
+  skeletonBlock: { borderRadius: radii.sm, backgroundColor: colors.panelSoft },
   skeletonLine: {
     height: 12,
     borderRadius: 6,
@@ -668,10 +662,8 @@ const styles = StyleSheet.create({
   pubIconWrap: {
     width: 42,
     height: 42,
-    borderRadius: radii.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.goldSoft,
   },
   pubText: { flex: 1, gap: 4 },
   pubName: {
@@ -714,10 +706,8 @@ const styles = StyleSheet.create({
   promoIcon: {
     width: 44,
     height: 44,
-    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.gold,
   },
   promoCopy: { flex: 1 },
   promoTitle: {
