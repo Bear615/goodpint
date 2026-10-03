@@ -1,25 +1,31 @@
 import * as Haptics from 'expo-haptics';
-import { useCallback, useRef, useState } from 'react';
-import { PanResponder, StyleSheet, Text, View } from 'react-native';
-import { font } from '../theme';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Easing, PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
+import { colors, font } from '../theme';
+import { STAR_EMPTY, StarGlyph } from './RatingStars';
+
+const useNativeMotion = Platform.OS !== 'web';
 
 export const CONFETTI_COLORS = ['#F4C84A', '#FFD700', '#FF6B35', '#4ECDC4', '#45B7D1', '#FFA500', '#FF69B4', '#A8E6CF'];
 
-const STAR_SIZE = 52;
+// Slot width per star — drives the pixel→star math, so keep it in sync with
+// the rendered row. The glyph sits centred inside a slightly smaller box.
+const STAR_SIZE = 56;
+const GLYPH_SIZE = 46;
 const NUM_STARS = 5;
 const HALF = STAR_SIZE / 2;
 
 const LABEL: Record<string, string> = {
-  '0.5': 'Meh',
+  '0.5': 'Flat pint',
   '1':   'Poor',
-  '1.5': 'Hmm',
+  '1.5': 'Not great',
   '2':   'Okay',
   '2.5': 'Decent',
   '3':   'Good',
-  '3.5': 'Good+',
+  '3.5': 'Really good',
   '4':   'Great',
   '4.5': 'Excellent',
-  '5':   'Perfect!',
+  '5':   'Perfect pint!',
 };
 
 function hapticStyle(stars: number): Haptics.ImpactFeedbackStyle {
@@ -46,6 +52,33 @@ export function StarRatingReview({ initialStars = 0, onCelebrate, onRate }: Prop
   const containerX = useRef(0);
   const containerRef = useRef<View>(null);
   const celebratedRef = useRef(initialStars >= NUM_STARS);
+
+  // Per-star "pop" as the fill reaches it, plus a readout bump on each change.
+  const starScales = useRef(Array.from({ length: NUM_STARS }, () => new Animated.Value(1))).current;
+  const readoutScale = useRef(new Animated.Value(1)).current;
+  const prevStarRef = useRef(initialStars);
+  useEffect(() => {
+    const prev = prevStarRef.current;
+    prevStarRef.current = currentStar;
+    if (prev === currentStar) return;
+    const idx = Math.ceil(currentStar) - 1;
+    if (currentStar > prev && idx >= 0) {
+      starScales[idx].setValue(1.28);
+      Animated.spring(starScales[idx], {
+        toValue: 1,
+        friction: 4,
+        tension: 160,
+        useNativeDriver: useNativeMotion,
+      }).start();
+    }
+    readoutScale.setValue(1.12);
+    Animated.timing(readoutScale, {
+      toValue: 1,
+      duration: 180,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: useNativeMotion,
+    }).start();
+  }, [currentStar, starScales, readoutScale]);
 
   // Re-measure the row's window origin on each gesture start. The widget lives
   // inside a sliding modal, so a single onLayout measure can capture a stale
@@ -107,8 +140,19 @@ export function StarRatingReview({ initialStars = 0, onCelebrate, onRate }: Prop
     }),
   ).current;
 
+  const label = currentStar === 0
+    ? (initialStars > 0 ? 'Drag to update' : 'Tap or drag across the stars')
+    : LABEL[currentStar.toString()] ?? currentStar.toFixed(1);
+
   return (
     <View style={styles.wrapper}>
+      <Animated.View style={[styles.readout, { transform: [{ scale: readoutScale }] }]}>
+        <Text style={[styles.readoutValue, currentStar === 0 && styles.readoutIdle]}>
+          {currentStar === 0 ? '–' : currentStar.toFixed(1)}
+        </Text>
+        <Text style={styles.readoutOutOf}>/ 5</Text>
+      </Animated.View>
+
       {/* Large invisible hitbox owns the gesture so dragging off the stars
           (above/below/past either end) keeps tracking. The inner row is what
           gets measured, so the pixel→star math stays anchored to the stars. */}
@@ -120,29 +164,31 @@ export function StarRatingReview({ initialStars = 0, onCelebrate, onRate }: Prop
       >
         {Array.from({ length: NUM_STARS }, (_, i) => {
           const portion = Math.max(0, Math.min(1, currentStar - i));
-          const fillWidth = portion === 0 ? 0 : portion <= 0.5 ? HALF : STAR_SIZE;
+          const fillWidth = portion === 0 ? 0 : portion <= 0.5 ? GLYPH_SIZE / 2 : GLYPH_SIZE;
           return (
             <View key={i} style={styles.starWrap}>
-              {/* empty base */}
-              <Text style={styles.starEmpty}>★</Text>
-              {/* gold fill, clipped from left */}
-              {fillWidth > 0 ? (
-                <View style={[styles.starFillClip, { width: fillWidth }]}>
-                  <View style={styles.starFillAlign}>
-                    <Text style={styles.starGold}>★</Text>
+              <Animated.View style={[styles.glyphBox, { transform: [{ scale: starScales[i] }] }]}>
+                {/* empty base */}
+                <StarGlyph size={GLYPH_SIZE} color={STAR_EMPTY} />
+                {/* gold fill, clipped from left */}
+                {fillWidth > 0 ? (
+                  <View style={[styles.starFillClip, { width: fillWidth }]}>
+                    <StarGlyph size={GLYPH_SIZE} color={colors.gold} />
                   </View>
-                </View>
-              ) : null}
+                ) : null}
+              </Animated.View>
             </View>
           );
         })}
       </View>
+      {/* progress track under the stars */}
+      <View style={styles.track}>
+        <View style={[styles.trackFill, { width: `${(currentStar / NUM_STARS) * 100}%` }]} />
       </View>
-      <Text style={styles.hint}>
-        {currentStar === 0
-          ? (initialStars > 0 ? 'Drag to update' : 'Hold & drag to rate')
-          : LABEL[currentStar.toString()] ?? currentStar.toFixed(1)}
-      </Text>
+      </View>
+      <View style={[styles.labelChip, currentStar === 0 && styles.labelChipIdle]}>
+        <Text style={[styles.labelText, currentStar === 0 && styles.labelTextIdle]}>{label}</Text>
+      </View>
     </View>
   );
 }
@@ -150,12 +196,34 @@ export function StarRatingReview({ initialStars = 0, onCelebrate, onRate }: Prop
 const styles = StyleSheet.create({
   wrapper: {
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 4,
+  },
+  readout: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  readoutValue: {
+    color: colors.text,
+    fontFamily: font.medium,
+    fontSize: 56,
+    lineHeight: 62,
+    letterSpacing: -1.5,
+  },
+  readoutIdle: {
+    color: 'rgba(255,255,255,0.18)',
+  },
+  readoutOutOf: {
+    color: colors.textSubtle,
+    fontFamily: font.regular,
+    fontSize: 18,
+    marginBottom: 10,
   },
   hitbox: {
     // Generous padding = invisible drag area extending well past the stars.
-    paddingHorizontal: 48,
-    paddingVertical: 28,
+    paddingHorizontal: 32,
+    paddingTop: 14,
+    paddingBottom: 18,
   },
   starsRow: {
     flexDirection: 'row',
@@ -166,34 +234,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  starEmpty: {
-    fontSize: 38,
-    lineHeight: STAR_SIZE,
-    color: 'rgba(255,255,255,0.15)',
+  glyphBox: {
+    width: GLYPH_SIZE,
+    height: GLYPH_SIZE,
   },
   starFillClip: {
     position: 'absolute',
     top: 0,
     left: 0,
-    height: STAR_SIZE,
+    height: GLYPH_SIZE,
     overflow: 'hidden',
   },
-  starFillAlign: {
-    width: STAR_SIZE,
-    height: STAR_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
+  track: {
+    height: 4,
+    marginTop: 12,
+    marginHorizontal: (STAR_SIZE - GLYPH_SIZE) / 2,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    overflow: 'hidden',
   },
-  starGold: {
-    fontSize: 38,
-    lineHeight: STAR_SIZE,
-    color: '#F4C84A',
+  trackFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: colors.gold,
   },
-  hint: {
-    marginTop: 6,
-    color: 'rgba(255,255,255,0.4)',
+  labelChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: colors.goldSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(244,200,74,0.3)',
+  },
+  labelChipIdle: {
+    backgroundColor: 'transparent',
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  labelText: {
+    color: colors.goldBright,
+    fontFamily: font.medium,
+    fontSize: 14,
+    letterSpacing: 0.2,
+  },
+  labelTextIdle: {
+    color: colors.textSubtle,
     fontFamily: font.regular,
     fontSize: 13,
-    letterSpacing: 0.3,
   },
 });
