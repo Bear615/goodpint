@@ -12,6 +12,12 @@ import { NAV_HEIGHT, NAV_INSET, NAV_RADIUS, NavTabs, type NavTabsProps } from '.
 // `z-index: 0`, which makes it a stacking context; the library's
 // mix-blend-mode rim layers then isolate that context, and the glass blur can
 // no longer see the page behind it.
+//
+// The refraction samples slightly outside the pill, so on its own it leaves a
+// band at the rim where the page shows through unblurred. A plain frosted
+// underlay fills that band; elasticity stays off so the two never drift apart.
+const UNDERLAY_BLUR = 10;
+
 export function BottomNav(props: NavTabsProps) {
   const dockRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -37,6 +43,15 @@ export function BottomNav(props: NavTabsProps) {
         pointerEvents: 'none',
       }}
     >
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          borderRadius: NAV_RADIUS,
+          backdropFilter: `blur(${UNDERLAY_BLUR}px) saturate(150%)`,
+          WebkitBackdropFilter: `blur(${UNDERLAY_BLUR}px) saturate(150%)`,
+        }}
+      />
       {width > 0 ? (
         // The library only measures itself on mount and window resize, so
         // remount when the dock width changes.
@@ -48,7 +63,7 @@ export function BottomNav(props: NavTabsProps) {
           blurAmount={0.2}
           saturation={150}
           aberrationIntensity={1.5}
-          elasticity={0.08}
+          elasticity={0}
           mode="standard"
           style={{ position: 'absolute', top: '50%', left: '50%', pointerEvents: 'auto' }}
         >
