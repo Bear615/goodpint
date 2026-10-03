@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   brandRow: { flexDirection: 'row', justifyContent: 'center' },
-  brand: { color: colors.text, fontFamily: font.bold, fontSize: 40, letterSpacing: 0.5 },
+  brand: { color: colors.text, fontFamily: font.bold, fontSize: 40, letterSpacing: -1.2 },
   brandGold: { color: colors.gold },
   tagline: {
     color: colors.textMuted,
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.xl,
   },
-  title: { color: colors.text, fontFamily: font.bold, fontSize: 24 },
+  title: { color: colors.text, fontFamily: font.semibold, fontSize: 24, letterSpacing: -0.6 },
   subtitle: { color: colors.textMuted, fontFamily: font.regular, fontSize: 14, marginTop: spacing.xs, marginBottom: spacing.lg },
   field: { marginBottom: spacing.md },
   label: { color: colors.textMuted, fontFamily: font.medium, fontSize: 13, marginBottom: spacing.xs },

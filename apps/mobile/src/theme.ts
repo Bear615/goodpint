@@ -1,13 +1,11 @@
-import { Platform } from 'react-native';
-
 export const colors = {
   background: '#050607',
   backgroundWarm: '#090A0B',
   panel: '#0F1012',
   panelRaised: '#161719',
   panelSoft: 'rgba(255,255,255,0.045)',
-  panelGlass: 'rgba(15,16,18,0.82)',
-  border: 'rgba(255,255,255,0.105)',
+  panelGlass: '#101113',
+  border: 'rgba(255,255,255,0.07)',
   borderStrong: 'rgba(244,200,74,0.46)',
   gold: '#F4C84A',
   goldBright: '#FFE082',
@@ -27,11 +25,11 @@ export const colors = {
 };
 
 export const radii = {
-  xs: 5,
-  sm: 8,
-  md: 10,
-  lg: 14,
-  xl: 20,
+  xs: 6,
+  sm: 12,
+  md: 14,
+  lg: 18,
+  xl: 24,
 };
 
 export const spacing = {
@@ -43,10 +41,13 @@ export const spacing = {
   xxl: 32,
 };
 
+// Inter, loaded once in App.tsx. Each weight is its own family so Android
+// never has to synthesise a bold, and nothing should set fontWeight on top.
 export const font = {
-  regular: Platform.select({ android: 'sans-serif', ios: 'System', default: 'Arial' }),
-  medium: Platform.select({ android: 'sans-serif-medium', ios: 'System', default: 'Arial' }),
-  bold: Platform.select({ android: 'sans-serif-condensed', ios: 'System', default: 'Arial' }),
+  regular: 'Inter_400Regular',
+  medium: 'Inter_500Medium',
+  semibold: 'Inter_600SemiBold',
+  bold: 'Inter_700Bold',
 };
 
 export const shadow = {

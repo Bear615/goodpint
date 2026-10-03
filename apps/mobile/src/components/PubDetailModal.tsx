@@ -424,8 +424,9 @@ const styles = StyleSheet.create({
   },
   pubName: {
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 26,
+    letterSpacing: -0.6,
     lineHeight: 32,
   },
   metaRow: {
@@ -639,8 +640,9 @@ const styles = StyleSheet.create({
   rateTitle: {
     flex: 1,
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 18,
+    letterSpacing: -0.3,
   },
   reviewArea: {
     alignItems: 'center',

@@ -35,8 +35,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
     backgroundColor: colors.gold,
   },
   compact: {
@@ -48,9 +46,9 @@ const styles = StyleSheet.create({
   },
   label: {
     color: '#080808',
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 16,
-    letterSpacing: 0.3,
+    letterSpacing: -0.2,
   },
   compactLabel: {
     fontSize: 12,

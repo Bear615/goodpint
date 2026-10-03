@@ -13,7 +13,7 @@ export function SectionCard({ children, elevated = false, style }: SectionCardPr
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: radii.sm,
+    borderRadius: radii.lg,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,

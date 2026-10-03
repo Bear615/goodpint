@@ -124,8 +124,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 24,
+    letterSpacing: -0.6,
   },
   iconButton: {
     width: 44,
@@ -158,8 +159,9 @@ const styles = StyleSheet.create({
   },
   name: {
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 19,
+    letterSpacing: -0.3,
   },
   handle: {
     marginTop: 5,
@@ -206,8 +208,9 @@ const styles = StyleSheet.create({
     marginTop: 26,
     marginBottom: 12,
     color: colors.text,
-    fontFamily: font.medium,
+    fontFamily: font.semibold,
     fontSize: 18,
+    letterSpacing: -0.3,
   },
   preferenceRow: {
     minHeight: 58,
