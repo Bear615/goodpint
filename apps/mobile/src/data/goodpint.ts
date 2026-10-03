@@ -4,9 +4,9 @@ import type { AppStatePayload } from '../types';
 // not user data, so it stays in the app.
 export const filters = [
   { id: 'nearby', label: 'Nearby' },
-  { id: 'top-rated', label: 'Top Rated' },
-  { id: 'happy-hour', label: 'Happy Hour' },
-  { id: 'live-music', label: 'Live Music' },
+  { id: 'top-rated', label: 'Top rated' },
+  { id: 'happy-hour', label: 'Happy hour' },
+  { id: 'live-music', label: 'Live music' },
 ] as const;
 
 // The app holds no fabricated user data anymore. Everything (profile, points,

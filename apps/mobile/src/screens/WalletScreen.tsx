@@ -1,9 +1,10 @@
 import { Alert, StyleSheet, Text, View } from 'react-native';
-import { ChevronRight, Gift, History, Plus, Star, Ticket, WalletCards } from 'lucide-react-native';
+import { ChevronRight, Gift, History, Plus, QrCode, Star, Ticket, WalletCards } from 'lucide-react-native';
 import React from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, font, formatCurrency, radii } from '../theme';
 import type { Pass, Transaction, Voucher, WalletState } from '../types';
+import { MembershipCard } from '../components/MembershipCard';
 import { PressableScale } from '../components/Motion';
 import { SectionCard } from '../components/SectionCard';
 
@@ -18,13 +19,19 @@ interface WalletScreenProps {
 
 export function WalletScreen({ wallet, passes, vouchers = [], transactions, onTopUp }: WalletScreenProps) {
   const [showAll, setShowAll] = React.useState(false);
+  const [cardOpen, setCardOpen] = React.useState(false);
   const visibleTx = showAll ? transactions : transactions.slice(0, 3);
   const hasCard = wallet.cardLast4.length > 0;
   return (
     <View>
       <Text style={styles.title}>Wallet</Text>
 
-      <LinearGradient colors={['rgba(255,255,255,0.06)', 'rgba(244,200,74,0.065)']} style={styles.walletCard}>
+      <LinearGradient
+        colors={[colors.brandBright, colors.brand, colors.brandDeep]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.walletCard}
+      >
         <View style={styles.cardTop}>
           <Text style={styles.cardTitle}>GoodPint Card</Text>
           <Text style={styles.cardDigits}>{hasCard ? `.... ${wallet.cardLast4}` : '•••• ••••'}</Text>
@@ -38,7 +45,7 @@ export function WalletScreen({ wallet, passes, vouchers = [], transactions, onTo
         </View>
       </LinearGradient>
 
-      <Text style={styles.sectionTitle}>Your Passes</Text>
+      <Text style={styles.sectionTitle}>Your passes</Text>
       <View style={styles.passList}>
         {passes.map((pass, index) => (
           <SectionCard key={pass.id}>
@@ -80,10 +87,18 @@ export function WalletScreen({ wallet, passes, vouchers = [], transactions, onTo
       </View>
 
       <SectionCard>
-        <PressableScale onPress={() => Alert.alert('Payment Methods', 'Card management coming soon.')}>
+        <PressableScale onPress={() => setCardOpen(true)}>
+          <View style={styles.menuRow}>
+            <QrCode color={colors.text} size={23} />
+            <Text style={styles.menuText}>Membership card</Text>
+            <ChevronRight color={colors.text} size={22} />
+          </View>
+        </PressableScale>
+        <View style={styles.menuDivider} />
+        <PressableScale onPress={() => Alert.alert('Payment methods', 'Card management coming soon.')}>
           <View style={styles.menuRow}>
             <WalletCards color={colors.text} size={23} />
-            <Text style={styles.menuText}>Payment Methods</Text>
+            <Text style={styles.menuText}>Payment methods</Text>
             <ChevronRight color={colors.text} size={22} />
           </View>
         </PressableScale>
@@ -91,13 +106,13 @@ export function WalletScreen({ wallet, passes, vouchers = [], transactions, onTo
         <PressableScale onPress={() => setShowAll((v) => !v)}>
           <View style={styles.menuRow}>
             <History color={colors.text} size={23} />
-            <Text style={styles.menuText}>Transaction History</Text>
+            <Text style={styles.menuText}>Transaction history</Text>
             <ChevronRight color={colors.text} size={22} />
           </View>
         </PressableScale>
       </SectionCard>
 
-      <Text style={styles.sectionTitle}>{showAll ? 'All Transactions' : 'Recent'}</Text>
+      <Text style={styles.sectionTitle}>{showAll ? 'All transactions' : 'Recent'}</Text>
       <View style={styles.transactionList}>
         {visibleTx.map((transaction) => (
           <View key={transaction.id} style={styles.transactionRow}>
@@ -111,6 +126,8 @@ export function WalletScreen({ wallet, passes, vouchers = [], transactions, onTo
           </View>
         ))}
       </View>
+
+      <MembershipCard visible={cardOpen} onClose={() => setCardOpen(false)} />
     </View>
   );
 }
@@ -125,12 +142,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
   },
   walletCard: {
-    minHeight: 170,
-    borderRadius: radii.sm,
-    padding: 20,
+    minHeight: 190,
+    borderRadius: radii.xl,
+    padding: 22,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   cardTop: {
     flexDirection: 'row',
@@ -138,21 +153,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardTitle: {
-    color: colors.text,
-    fontFamily: font.regular,
+    color: colors.cream,
+    fontFamily: font.semibold,
     fontSize: 16,
   },
   cardDigits: {
-    color: colors.text,
+    color: colors.cream,
     fontFamily: font.medium,
     fontSize: 16,
   },
   balance: {
     marginTop: 28,
-    color: colors.gold,
-    fontFamily: font.semibold,
-    fontSize: 30,
-    letterSpacing: -1,
+    color: colors.cream,
+    fontFamily: font.bold,
+    fontSize: 38,
+    letterSpacing: -1.4,
   },
   cardBottom: {
     marginTop: 24,
@@ -161,7 +176,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   tapText: {
-    color: colors.textMuted,
+    color: colors.cream,
+    opacity: 0.75,
     fontFamily: font.regular,
     fontSize: 15,
   },

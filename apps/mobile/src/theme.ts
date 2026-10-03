@@ -7,6 +7,13 @@ export const colors = {
   panelGlass: '#101113',
   border: 'rgba(255,255,255,0.07)',
   borderStrong: 'rgba(244,200,74,0.46)',
+  // Solid "card" surfaces (Rewards header, wallet and membership cards):
+  // near-black with a gold tint, so they read as the app's own card stock.
+  brand: '#17140C',
+  brandBright: '#2A2312',
+  brandDeep: '#0B0A08',
+  brandSoft: 'rgba(244,200,74,0.12)',
+  cream: '#FFFFFF',
   gold: '#F4C84A',
   goldBright: '#FFE082',
   goldDark: '#8E610D',

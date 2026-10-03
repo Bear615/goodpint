@@ -31,6 +31,7 @@ import type { FilterKey, OsmPub, RatingMap } from '../types';
 import { NativeMap, type NativeMapRef } from '../components/NativeMap';
 import { PressableScale } from '../components/Motion';
 import { RatingStars } from '../components/RatingStars';
+import { useAuth } from '../context/AuthContext';
 import { PubDetailModal } from '../components/PubDetailModal';
 
 const filterIcons: Record<FilterKey, LucideIcon> = {
@@ -39,6 +40,13 @@ const filterIcons: Record<FilterKey, LucideIcon> = {
   'happy-hour': Clock,
   'live-music': Music,
 };
+
+function greeting(name?: string) {
+  const hour = new Date().getHours();
+  const part = hour < 5 ? 'evening' : hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+  const first = name?.trim().split(/\s+/)[0];
+  return first ? `Good ${part}, ${first}` : `Good ${part}`;
+}
 
 const sectionTitles: Record<FilterKey, string> = {
   nearby: 'Nearby bars',
@@ -83,6 +91,7 @@ export function ExploreScreen({
   onSubmitReview,
   onOpenBuy,
 }: ExploreScreenProps) {
+  const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [mapReady, setMapReady] = useState(false);
@@ -222,7 +231,7 @@ export function ExploreScreen({
             <Text style={styles.brand}>
               Good<Text style={styles.brandGold}>Pint</Text>
             </Text>
-            <Text style={styles.brandMeta}>Pints, points, plans</Text>
+            <Text style={styles.brandMeta}>{greeting(user?.name)}</Text>
           </View>
         </View>
         <PressableScale
@@ -427,9 +436,9 @@ const styles = StyleSheet.create({
   },
   brandGold: { color: colors.gold },
   brandMeta: {
-    color: colors.textSubtle,
+    color: colors.textMuted,
     fontFamily: font.medium,
-    fontSize: 12,
+    fontSize: 13,
   },
   pointsChip: {
     height: 36,
