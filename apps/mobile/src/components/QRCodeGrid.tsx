@@ -4,7 +4,7 @@ import QRCode from 'qrcode';
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 import { colors, goldGlow, radii } from '../theme';
 
-// Scanners want true white, not the app's warm off-white text colour.
+// Scanners want true white, whatever the app's text colour is.
 const QR_LIGHT = '#FFFFFF';
 
 interface QRCodeGridProps {

@@ -14,14 +14,14 @@ export function membershipId(userId: string) {
   return `GP-${hex.slice(0, 5)}-${hex.slice(5, 10)}`;
 }
 
-// The pill that opens the card. Sits on a coloured header, so it is a light
-// chip rather than another dark one.
+// The pill that opens the card. Gold with dark text, like the app's other
+// primary actions, so it stands out on the header.
 export function MembershipPill({ onPress }: { onPress: () => void }) {
   return (
     <PressableScale accessibilityLabel="Show my membership card" onPress={onPress} pressedScale={0.95}>
       <View style={styles.pill}>
         <Text style={styles.pillText}>My membership ID</Text>
-        <QrCode color={colors.brandDeep} size={16} strokeWidth={2.2} />
+        <QrCode color="#141006" size={16} strokeWidth={2.2} />
       </View>
     </PressableScale>
   );
@@ -89,10 +89,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    backgroundColor: colors.cream,
+    backgroundColor: colors.gold,
   },
   pillText: {
-    color: colors.brandDeep,
+    color: '#141006',
     fontFamily: font.semibold,
     fontSize: 13,
   },
