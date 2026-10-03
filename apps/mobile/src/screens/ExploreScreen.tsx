@@ -31,6 +31,7 @@ import type { FilterKey, OsmPub, RatingMap } from '../types';
 import { NativeMap, type NativeMapRef } from '../components/NativeMap';
 import { PressableScale } from '../components/Motion';
 import { RatingStars } from '../components/RatingStars';
+import { useAuth } from '../context/AuthContext';
 import { PubDetailModal } from '../components/PubDetailModal';
 
 const filterIcons: Record<FilterKey, LucideIcon> = {
@@ -39,6 +40,13 @@ const filterIcons: Record<FilterKey, LucideIcon> = {
   'happy-hour': Clock,
   'live-music': Music,
 };
+
+function greeting(name?: string) {
+  const hour = new Date().getHours();
+  const part = hour < 5 ? 'evening' : hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+  const first = name?.trim().split(/\s+/)[0];
+  return first ? `Good ${part}, ${first}` : `Good ${part}`;
+}
 
 const sectionTitles: Record<FilterKey, string> = {
   nearby: 'Nearby bars',
@@ -83,6 +91,7 @@ export function ExploreScreen({
   onSubmitReview,
   onOpenBuy,
 }: ExploreScreenProps) {
+  const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [mapReady, setMapReady] = useState(false);
@@ -211,18 +220,18 @@ export function ExploreScreen({
       <View style={styles.brandRow}>
         <View style={styles.logoLockup}>
           <LinearGradient
-            colors={[colors.goldBright, colors.gold]}
+            colors={[colors.brandBright, colors.brandDeep]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.logoMark}
           >
-            <Beer color="#141006" size={20} strokeWidth={2.4} />
+            <Beer color={colors.cream} size={20} strokeWidth={2.2} />
           </LinearGradient>
           <View>
             <Text style={styles.brand}>
               Good<Text style={styles.brandGold}>Pint</Text>
             </Text>
-            <Text style={styles.brandMeta}>Pints, points, plans</Text>
+            <Text style={styles.brandMeta}>{greeting(user?.name)}</Text>
           </View>
         </View>
         <PressableScale
@@ -274,7 +283,7 @@ export function ExploreScreen({
               pressedScale={0.95}
             >
               <View style={[styles.filterPill, active && styles.filterPillActive]}>
-                <Icon color={active ? '#141006' : colors.textMuted} size={14} strokeWidth={2.2} />
+                <Icon color={active ? colors.cream : colors.textMuted} size={14} strokeWidth={2.2} />
                 <Text style={[styles.filterText, active && styles.filterTextActive]}>{filter.label}</Text>
               </View>
             </PressableScale>
@@ -427,9 +436,9 @@ const styles = StyleSheet.create({
   },
   brandGold: { color: colors.gold },
   brandMeta: {
-    color: colors.textSubtle,
+    color: colors.textMuted,
     fontFamily: font.medium,
-    fontSize: 12,
+    fontSize: 13,
   },
   pointsChip: {
     height: 36,
@@ -494,8 +503,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panelRaised,
   },
   filterPillActive: {
-    borderColor: colors.gold,
-    backgroundColor: colors.gold,
+    borderColor: colors.brandBright,
+    backgroundColor: colors.brand,
   },
   filterText: {
     color: colors.textMuted,
@@ -503,7 +512,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   filterTextActive: {
-    color: '#141006',
+    color: colors.cream,
     fontFamily: font.semibold,
   },
   mapWrap: {

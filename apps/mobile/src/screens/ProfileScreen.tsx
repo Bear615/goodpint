@@ -78,7 +78,7 @@ export function ProfileScreen({ profile, points, wallet, favoriteVenue }: Profil
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Your Regular</Text>
+      <Text style={styles.sectionTitle}>Your regular</Text>
       <SectionCard>
         <View style={styles.preferenceRow}>
           <Text style={styles.preferenceLabel}>Usual spot</Text>

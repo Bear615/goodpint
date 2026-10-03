@@ -4,9 +4,14 @@ import QRCode from 'qrcode';
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 import { colors, goldGlow, radii } from '../theme';
 
+// Scanners want true white, not the app's warm off-white text colour.
+const QR_LIGHT = '#FFFFFF';
+
 interface QRCodeGridProps {
   value: string;
   size?: number;
+  // Drop the gold glow and pulse ring, for a QR that sits on a coloured card.
+  plain?: boolean;
 }
 
 type QRModel = {
@@ -16,7 +21,7 @@ type QRModel = {
   };
 };
 
-export function QRCodeGrid({ value, size = 236 }: QRCodeGridProps) {
+export function QRCodeGrid({ value, size = 236, plain = false }: QRCodeGridProps) {
   const pulse = useRef(new Animated.Value(0)).current;
   const matrix = useMemo(() => {
     const code = QRCode.create(value, { errorCorrectionLevel: 'M' }) as unknown as QRModel;
@@ -58,19 +63,21 @@ export function QRCodeGrid({ value, size = 236 }: QRCodeGridProps) {
   const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.34, 0.08] });
 
   return (
-    <View style={[styles.outer, { width: size, height: size }]}>
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.pulseRing,
-          {
-            width: size,
-            height: size,
-            opacity: ringOpacity,
-            transform: [{ scale: ringScale }],
-          },
-        ]}
-      />
+    <View style={[styles.outer, plain && styles.outerPlain, { width: size, height: size }]}>
+      {plain ? null : (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.pulseRing,
+            {
+              width: size,
+              height: size,
+              opacity: ringOpacity,
+              transform: [{ scale: ringScale }],
+            },
+          ]}
+        />
+      )}
       <View style={[styles.inner, { width: innerSize, height: innerSize }]}>
         {matrix.map((row, rowIndex) => (
           <View key={`row-${rowIndex}`} style={styles.row}>
@@ -98,8 +105,14 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.borderStrong,
-    backgroundColor: colors.text,
+    backgroundColor: QR_LIGHT,
     ...goldGlow,
+  },
+  outerPlain: {
+    borderWidth: 0,
+    borderRadius: radii.lg,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   pulseRing: {
     position: 'absolute',
@@ -108,7 +121,7 @@ const styles = StyleSheet.create({
     borderColor: colors.gold,
   },
   inner: {
-    backgroundColor: colors.text,
+    backgroundColor: QR_LIGHT,
   },
   row: {
     flexDirection: 'row',
@@ -120,6 +133,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#050505',
   },
   lightCell: {
-    backgroundColor: colors.text,
+    backgroundColor: QR_LIGHT,
   },
 });
