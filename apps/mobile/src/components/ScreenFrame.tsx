@@ -1,10 +1,13 @@
 import type { PropsWithChildren, ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
+import { BlurTargetView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PanResponder, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { colors } from '../theme';
+import { BlurTargetContext } from './BlurTarget';
+import { NAV_CLEARANCE } from './NavTabs';
 
 interface ScreenFrameProps extends PropsWithChildren {
   bottomNav: ReactNode;
@@ -15,6 +18,7 @@ interface ScreenFrameProps extends PropsWithChildren {
 
 export function ScreenFrame({ children, bottomNav, scrollKey, onSwipeLeft, onSwipeRight }: ScreenFrameProps) {
   const scrollRef = useRef<ScrollView>(null);
+  const blurTargetRef = useRef<View>(null);
   const onSwipeLeftRef = useRef(onSwipeLeft);
   const onSwipeRightRef = useRef(onSwipeRight);
 
@@ -66,7 +70,7 @@ export function ScreenFrame({ children, bottomNav, scrollKey, onSwipeLeft, onSwi
       <StatusBar style="light" />
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.phoneFrame}>
-          <View style={styles.contentArea} {...swipePan.panHandlers}>
+          <BlurTargetView ref={blurTargetRef} style={styles.contentArea} {...swipePan.panHandlers}>
             <ScrollView
               key={scrollKey}
               ref={scrollRef}
@@ -76,8 +80,9 @@ export function ScreenFrame({ children, bottomNav, scrollKey, onSwipeLeft, onSwi
             >
               {children}
             </ScrollView>
-          </View>
-          {bottomNav}
+          </BlurTargetView>
+          {/* The nav floats over the content so it scrolls behind the glass. */}
+          <BlurTargetContext.Provider value={blurTargetRef}>{bottomNav}</BlurTargetContext.Provider>
         </View>
       </SafeAreaView>
     </LinearGradient>
@@ -109,10 +114,11 @@ const styles = StyleSheet.create({
   },
   contentArea: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   scrollContent: {
     paddingHorizontal: 22,
     paddingTop: 14,
-    paddingBottom: 32,
+    paddingBottom: 32 + NAV_CLEARANCE,
   },
 });

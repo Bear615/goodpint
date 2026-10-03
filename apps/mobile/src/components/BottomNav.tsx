@@ -1,121 +1,68 @@
-import type { ComponentType } from 'react';
-import { useEffect, useRef, useState } from 'react';
-import { Beer, MapPinned, Route, UserRound, WalletMinimal } from 'lucide-react-native';
-import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, font } from '../theme';
-import type { TabKey } from '../types';
+import { useContext } from 'react';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { StyleSheet, View } from 'react-native';
+import { BlurTargetContext } from './BlurTarget';
+import { NAV_HEIGHT, NAV_INSET, NAV_RADIUS, NavTabs, type NavTabsProps } from './NavTabs';
 
-type IconComponent = ComponentType<{ color?: string; size?: number; strokeWidth?: number }>;
-
-const tabs: Array<{ id: TabKey; label: string; Icon: IconComponent }> = [
-  { id: 'explore', label: 'Explore', Icon: MapPinned },
-  { id: 'points', label: 'Points', Icon: Beer },
-  { id: 'plan', label: 'Plan', Icon: Route },
-  { id: 'wallet', label: 'Wallet', Icon: WalletMinimal },
-  { id: 'profile', label: 'You', Icon: UserRound },
-];
-
-// The marker is a short bar that sits on the top rule and slides to whichever
-// tab is active. It is the only moving part, so it is the only gold on the bar.
-const MARKER_WIDTH = 20;
-
-interface BottomNavProps {
-  activeTab: TabKey;
-  onTabChange: (tab: TabKey) => void;
-}
-
-export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
-  const [tabWidth, setTabWidth] = useState(0);
-  const activeIndex = Math.max(tabs.findIndex((tab) => tab.id === activeTab), 0);
-  const position = useRef(new Animated.Value(activeIndex)).current;
-
-  useEffect(() => {
-    Animated.spring(position, {
-      toValue: activeIndex,
-      speed: 18,
-      bounciness: 4,
-      useNativeDriver: Platform.OS !== 'web',
-    }).start();
-  }, [activeIndex, position]);
-
-  const markerX = Animated.multiply(position, tabWidth);
+// A floating glass pill. The blur gives the frosted body, a faint white wash
+// keeps it readable over the near-black app, and a top-lit gradient rim fakes
+// the light catching the glass edge. The web build swaps in liquid-glass-react
+// (BottomNav.web.tsx) for real refraction.
+export function BottomNav(props: NavTabsProps) {
+  const blurTarget = useContext(BlurTargetContext);
 
   return (
-    <View
-      accessibilityRole="tablist"
-      style={styles.bar}
-      onLayout={(event) => setTabWidth(event.nativeEvent.layout.width / tabs.length)}
-    >
-      {tabWidth > 0 ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.marker,
-            { left: (tabWidth - MARKER_WIDTH) / 2, transform: [{ translateX: markerX }] },
-          ]}
+    <View pointerEvents="box-none" style={styles.dock}>
+      <View style={styles.pill}>
+        <BlurView
+          blurTarget={blurTarget ?? undefined}
+          blurMethod="dimezisBlurViewSdk31Plus"
+          intensity={45}
+          tint="systemUltraThinMaterialDark"
+          style={StyleSheet.absoluteFill}
         />
-      ) : null}
-
-      {tabs.map(({ id, label, Icon }) => {
-        const active = id === activeTab;
-        const tint = active ? colors.text : colors.textSubtle;
-
-        return (
-          <Pressable
-            key={id}
-            accessibilityLabel={label}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-            onPress={() => onTabChange(id)}
-            style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
-            testID={`tab-${id}`}
-          >
-            <Icon color={tint} size={21} strokeWidth={active ? 2 : 1.6} />
-            <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1}>
-              {label}
-            </Text>
-          </Pressable>
-        );
-      })}
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(255,255,255,0.14)', 'rgba(255,255,255,0.04)', 'rgba(255,255,255,0.08)']}
+          locations={[0, 0.55, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+        <NavTabs {...props} />
+        <View pointerEvents="none" style={styles.rim} />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bar: {
-    flexDirection: 'row',
-    height: 62,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.14)',
-    backgroundColor: '#0A0B0C',
+  dock: {
+    position: 'absolute',
+    left: NAV_INSET,
+    right: NAV_INSET,
+    bottom: NAV_INSET,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 12,
+    borderRadius: NAV_RADIUS,
   },
-  marker: {
+  pill: {
+    height: NAV_HEIGHT,
+    borderRadius: NAV_RADIUS,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(22,23,26,0.45)',
+  },
+  rim: {
     position: 'absolute',
     top: 0,
-    width: MARKER_WIDTH,
-    height: 3,
-    borderBottomLeftRadius: 3,
-    borderBottomRightRadius: 3,
-    backgroundColor: colors.gold,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 2,
-  },
-  pressed: {
-    opacity: 0.55,
-  },
-  label: {
-    marginTop: 5,
-    fontFamily: font.regular,
-    fontSize: 11,
-    letterSpacing: -0.1,
-    color: colors.textSubtle,
-  },
-  labelActive: {
-    fontFamily: font.semibold,
-    color: colors.text,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: NAV_RADIUS,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    borderTopColor: 'rgba(255,255,255,0.32)',
   },
 });
