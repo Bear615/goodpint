@@ -34,6 +34,8 @@ export interface ClientTransaction {
   title: string;
   amount: number;
   timestamp: string;
+  /** ISO time, so the client can group and chart activity by day. */
+  createdAt: string;
 }
 
 const insertTxStmt = sqlite.prepare(
@@ -80,6 +82,7 @@ export function getTransactions(userId: string): ClientTransaction[] {
     title: row.title,
     amount: penceToPounds(row.amount_pence),
     timestamp: friendlyTimestamp(row.created_at),
+    createdAt: row.created_at,
   }));
 }
 

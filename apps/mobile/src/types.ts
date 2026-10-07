@@ -62,6 +62,9 @@ export interface Transaction {
   title: string;
   amount: number;
   timestamp: string;
+  // ISO time from the server. Optional so an older API still renders, just
+  // without day grouping or the weekly chart.
+  createdAt?: string;
 }
 
 export interface TripStop {

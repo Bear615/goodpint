@@ -36,6 +36,7 @@ function nowTransaction(title: string, amount: number): Transaction {
     title,
     amount,
     timestamp: 'Just now',
+    createdAt: new Date().toISOString(),
   };
 }
 
@@ -387,9 +388,10 @@ function MainApp() {
     }
   };
 
-  const topUp = async () => {
-    if (isSubmitting) return;
-    const amount = 25;
+  // Resolves true once the server has credited the wallet, so the top-up sheet
+  // only celebrates money that actually arrived.
+  const topUp = async (amount: number): Promise<boolean> => {
+    if (isSubmitting) return false;
 
     setIsSubmitting(true);
     try {
@@ -397,12 +399,14 @@ function MainApp() {
       setWallet((currentWallet) => ({ ...currentWallet, balance: result.balance }));
       setTransactions((currentTransactions) => [nowTransaction('Wallet top up', amount), ...currentTransactions]);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return true;
     } catch (error) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert(
         'Top up failed',
         error instanceof ApiError ? error.message : 'Something went wrong. Your card has not been charged.',
       );
+      return false;
     } finally {
       setIsSubmitting(false);
     }
@@ -468,10 +472,14 @@ function MainApp() {
     content = (
       <WalletScreen
         wallet={wallet}
+        points={points}
+        holderName={data.profile.name}
         passes={data.passes}
         vouchers={data.vouchers}
         transactions={transactions}
         onTopUp={topUp}
+        onOpenRewards={() => changeTab('points')}
+        onOpenExplore={() => changeTab('explore')}
       />
     );
   } else if (activeTab === 'profile') {
