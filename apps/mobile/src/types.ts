@@ -168,6 +168,8 @@ export type AppLoadStatus = 'loading' | 'ready' | 'error';
 export interface RecentEarn {
   points: number;
   venueName: string;
+  // The best reward this order made affordable, fixed at order time.
+  unlockedRewardId: string | null;
 }
 
 // Claims resolve to a value rather than throwing, so the claim sheet can show

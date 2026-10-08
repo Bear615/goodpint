@@ -118,7 +118,7 @@ export function WalletScreen({
   useEffect(() => {
     if (freshVoucherId && freshVoucherId !== lastFresh.current) {
       passAnimation();
-      setOpenId(undefined);
+      setOpenId(freshVoucherId);
     }
     lastFresh.current = freshVoucherId;
   }, [freshVoucherId]);
@@ -127,7 +127,7 @@ export function WalletScreen({
   useEffect(() => {
     if (justRedeemedId && justRedeemedId !== lastRedeemed.current) {
       passAnimation();
-      setOpenId(undefined);
+      setOpenId(justRedeemedId);
     }
     lastRedeemed.current = justRedeemedId;
   }, [justRedeemedId]);
@@ -151,6 +151,10 @@ export function WalletScreen({
     }, POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [pollId, onRefreshVouchers]);
+
+  // Re-read from the live list so a scan at the bar while the sheet is open
+  // flips it to Used; the stored copy only bridges the closing animation.
+  const shownDetails = (detailsVoucher && vouchers.find((voucher) => voucher.id === detailsVoucher.id)) ?? detailsVoucher;
 
   const balanceTransactions = useMemo(() => transactions.filter((tx) => tx.amount !== 0), [transactions]);
   const { affordable } = rewardProgress(points, rewards);
@@ -293,8 +297,8 @@ export function WalletScreen({
       )}
 
       <PassDetailsSheet
-        voucher={detailsVoucher}
-        description={rewards.find((reward) => reward.id === detailsVoucher?.rewardId)?.description}
+        voucher={shownDetails}
+        description={rewards.find((reward) => reward.id === shownDetails?.rewardId)?.description}
         visible={detailsOpen}
         onClose={() => setDetailsOpen(false)}
       />

@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Modal, PanResponder, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 
@@ -21,6 +21,7 @@ interface BottomSheetProps extends PropsWithChildren {
  */
 export function BottomSheet({ children, dismissable = true, onClose, visible }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const translateY = useRef(new Animated.Value(OFFSCREEN)).current;
   const backdrop = useRef(new Animated.Value(0)).current;
@@ -85,12 +86,22 @@ export function BottomSheet({ children, dismissable = true, onClose, visible }: 
           <Pressable accessibilityLabel="Close" style={StyleSheet.absoluteFill} onPress={requestClose} />
         </Animated.View>
         <Animated.View
-          style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8, transform: [{ translateY }] }]}
+          style={[
+            styles.sheet,
+            {
+              maxHeight: height - insets.top - 24,
+              paddingBottom: Math.max(insets.bottom, 16) + 8,
+              transform: [{ translateY }],
+            },
+          ]}
         >
           <View style={styles.grabberZone} {...dragToDismiss.panHandlers}>
             <View style={styles.grabber} />
           </View>
-          {children}
+          {/* Tall content scrolls on short screens; the grabber stays put. */}
+          <ScrollView style={styles.scroll} bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {children}
+          </ScrollView>
         </Animated.View>
       </View>
     </Modal>
@@ -116,6 +127,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     borderColor: 'rgba(255,255,255,0.09)',
     backgroundColor: colors.panelRaised,
+  },
+  scroll: {
+    flexGrow: 0,
+    flexShrink: 1,
   },
   grabberZone: {
     height: 30,

@@ -51,6 +51,7 @@ import type {
   WalletState,
 } from './src/types';
 import { fetchNearbyPubs } from './src/utils/pubs';
+import { crossedReward } from './src/utils/rewards';
 
 type NestedRoute = { name: 'buy'; venueId: string; pubName: string } | null;
 
@@ -400,6 +401,9 @@ function MainApp() {
         vouchers: [result.voucher, ...current.vouchers.filter((voucher) => voucher.id !== result.voucher.id)],
       }));
       setFreshVoucherId(result.voucher.id);
+      // The claim is now the latest moment; an earlier scan or order gives way.
+      setJustRedeemedId(null);
+      setRecentEarn(null);
       setClaim((current) => current && { ...current, open: false });
       if (activeTabRef.current !== 'wallet') changeTab('wallet');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -482,7 +486,15 @@ function MainApp() {
       ]);
       // The membership pass confirms the order and counts the points up, in
       // place of an Alert (which react-native-web never shows).
-      setRecentEarn(result.pointsEarned > 0 ? { points: result.pointsEarned, venueName: selectedVenue.name } : null);
+      setRecentEarn(
+        result.pointsEarned > 0
+          ? {
+              points: result.pointsEarned,
+              venueName: selectedVenue.name,
+              unlockedRewardId: crossedReward(result.points - result.pointsEarned, result.points, data.rewards)?.id ?? null,
+            }
+          : null,
+      );
       setSwipeDirection(null);
       setRoute(null);
       setActiveTab('wallet');

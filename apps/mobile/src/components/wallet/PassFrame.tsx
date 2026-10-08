@@ -19,9 +19,12 @@ interface PassFrameProps {
 /**
  * The shell every pass shares.
  *
- * A closed pass is one button. An open pass is a plain view whose strip is the
- * button, so the controls in its body sit beside it rather than inside it: on
- * web a role="button" renders a real <button>, and buttons cannot nest.
+ * The strip is the pass's one button, in the same place whether the pass is
+ * open or closed, so focus survives a toggle and the expanded state is read
+ * out. Controls in an open body sit beside the strip rather than inside it: on
+ * web a role="button" renders a real <button>, and buttons cannot nest. A
+ * closed body is still tappable, as a plain touch target hidden from
+ * assistive tech.
  */
 export function PassFrame({
   accessibilityLabel,
@@ -34,37 +37,32 @@ export function PassFrame({
   strip,
   style,
 }: PassFrameProps) {
-  const frame = [styles.card, borderColor ? { borderColor } : null, style];
-
-  if (!open) {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-        accessibilityState={{ expanded: false }}
-        onPress={onToggle}
-        style={[frame, styles.closed]}
-      >
-        {background}
-        <View style={passStyles.strip}>{strip}</View>
-        {closedBody}
-      </Pressable>
-    );
-  }
-
   return (
-    <View style={frame}>
+    <View style={[styles.card, borderColor ? { borderColor } : null, !open && styles.closed, style]}>
       {background}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
-        accessibilityState={{ expanded: true }}
+        accessibilityState={{ expanded: open }}
         onPress={onToggle}
         style={passStyles.strip}
       >
         {strip}
       </Pressable>
-      {openBody}
+      {open ? (
+        openBody
+      ) : (
+        <Pressable
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          aria-hidden
+          tabIndex={-1}
+          onPress={onToggle}
+          style={styles.closedTarget}
+        >
+          {closedBody}
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -152,6 +150,9 @@ const styles = StyleSheet.create({
   // A closed pass is a fixed height so the stack's overlap maths is exact.
   closed: {
     height: COLLAPSED_HEIGHT,
+  },
+  closedTarget: {
+    flex: 1,
   },
   perforation: {
     height: PERFORATION_HEIGHT,

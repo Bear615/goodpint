@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { colors, font, formatPoints } from '../../theme';
 import type { ClaimResult, Reward } from '../../types';
+import { ptsLabel } from '../../utils/rewards';
 import { BottomSheet } from '../BottomSheet';
 import { GoldButton } from '../GoldButton';
 
@@ -51,7 +52,7 @@ export function ClaimSheet({ onClose, onConfirm, points, reward, visible }: Clai
   };
 
   const label = insufficient
-    ? `Need ${formatPoints(shortfall)} more pts`
+    ? `Need ${ptsLabel(shortfall)} more`
     : phase === 'sending'
       ? 'Adding…'
       : phase === 'error'

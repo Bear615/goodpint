@@ -1,4 +1,5 @@
 import type { Drink, RecentEarn, Reward, Tier, Transaction, Venue, Voucher } from '../types';
+import { formatPoints } from '../theme';
 import { expiryLabel } from './wallet';
 
 // The server only flips a voucher to expired when someone touches it, so an
@@ -46,6 +47,10 @@ export function crossedReward(from: number, to: number, rewards: Reward[]): Rewa
       .filter((reward) => from < reward.points && reward.points <= to)
       .sort((a, b) => b.points - a.points)[0] ?? null
   );
+}
+
+export function ptsLabel(points: number): string {
+  return `${formatPoints(points)} ${points === 1 ? 'pt' : 'pts'}`;
 }
 
 export function shortDate(iso: string): string {

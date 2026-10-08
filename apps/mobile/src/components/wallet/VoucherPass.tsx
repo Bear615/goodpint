@@ -108,7 +108,9 @@ export function VoucherPass({
       <Perforation covered={false} />
       <View style={styles.scan}>
         <QRCodeGrid value={voucherPayload(voucher.code)} size={200} />
-        <Text style={styles.bigCode}>{voucher.code}</Text>
+        <Text style={styles.bigCode} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+          {voucher.code}
+        </Text>
         <Text style={styles.instruction}>Show this at the bar — staff scan it or type the code</Text>
         {timing ? (
           <View style={styles.timingRow}>
@@ -192,8 +194,9 @@ const styles = StyleSheet.create({
     marginTop: 18,
     color: colors.gold,
     fontFamily: font.bold,
-    fontSize: 26,
-    letterSpacing: 4,
+    fontSize: 22,
+    letterSpacing: 2,
+    textAlign: 'center',
   },
   instruction: {
     marginTop: 6,

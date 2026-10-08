@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Beer, ChevronRight, CircleCheck, Ticket } from 'lucide-react-native';
 import { colors, font, formatPoints, tierAccent } from '../../theme';
 import type { Drink, RecentEarn, Reward, Tier, Venue } from '../../types';
-import { crossedReward, pointsForSingleDrink, rewardProgress } from '../../utils/rewards';
+import { pointsForSingleDrink, ptsLabel, rewardProgress } from '../../utils/rewards';
 import { useCountUp } from '../../utils/useCountUp';
 import { PressableScale } from '../Motion';
 import { PassFrame, passStyles } from './PassFrame';
@@ -57,7 +57,7 @@ export function MembershipPass({
   });
 
   const { affordable, next } = rewardProgress(points, rewards);
-  const crossed = recentEarn ? crossedReward(points - recentEarn.points, points, rewards) : null;
+  const crossed = recentEarn?.unlockedRewardId ? (rewards.find((reward) => reward.id === recentEarn.unlockedRewardId) ?? null) : null;
   const accent = tier ? tierAccent[tier.id] : colors.gold;
   const name = holderName.trim() || 'GoodPint Member';
   const toNext = next ? next.points - points : 0;
@@ -73,7 +73,7 @@ export function MembershipPass({
   } else if (affordable.length > 1) {
     detail = { text: `${affordable.length} rewards ready to claim`, color: colors.gold };
   } else if (next) {
-    detail = { text: `${next.title} in ${formatPoints(toNext)} pts`, color: colors.textMuted };
+    detail = { text: `${next.title} in ${ptsLabel(toNext)}`, color: colors.textMuted };
   } else if (tier) {
     detail = { text: `${tier.title} member`, color: colors.textMuted };
   } else {
@@ -89,7 +89,7 @@ export function MembershipPass({
       : affordable.length === 1
         ? `${affordable[0].title} ready to claim`
         : next
-          ? `${next.title} in ${formatPoints(toNext)} points`
+          ? `${next.title} in ${formatPoints(toNext)} ${toNext === 1 ? 'point' : 'points'}`
           : undefined,
   ]
     .filter(Boolean)
@@ -104,7 +104,8 @@ export function MembershipPass({
       </View>
       <View style={passStyles.copy}>
         <Text style={passStyles.title} numberOfLines={1}>GoodPint Member</Text>
-        {detail.text ? (
+        {/* Open, the body says it all; the strip just names the member. */}
+        {!open && detail.text ? (
           <Text style={[passStyles.detail, { color: detail.color }]} numberOfLines={1}>{detail.text}</Text>
         ) : null}
       </View>
@@ -185,7 +186,7 @@ export function MembershipPass({
       {next ? (
         <View style={styles.block}>
           <View style={styles.progressMeta}>
-            <Text style={styles.progressText}>{next.title} in {formatPoints(toNext)} pts</Text>
+            <Text style={styles.progressText}>{next.title} in {ptsLabel(toNext)}</Text>
             <Text style={styles.progressText}>{formatPoints(next.points)} pts</Text>
           </View>
           {progressBar}
