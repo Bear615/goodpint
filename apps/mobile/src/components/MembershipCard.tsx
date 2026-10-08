@@ -52,7 +52,7 @@ export function MembershipCard({ visible, onClose }: MembershipCardProps) {
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
       <View style={styles.sheet}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Scan before paying at the bar</Text>
+          <Text style={styles.headerTitle}>Your membership card</Text>
           <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Close" style={styles.close}>
             <X color={colors.text} size={18} strokeWidth={2.2} />
           </Pressable>
@@ -75,7 +75,7 @@ export function MembershipCard({ visible, onClose }: MembershipCardProps) {
           {user?.name ? <Text style={styles.member}>{user.name}</Text> : null}
         </LinearGradient>
 
-        <Text style={styles.hint}>Show this when you order and your points land on your account. Never miss a reward.</Text>
+        <Text style={styles.hint}>Scanning at the bar is coming soon. For now, earn points by checking in and buying drinks in the app.</Text>
       </View>
     </Modal>
   );
