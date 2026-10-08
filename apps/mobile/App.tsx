@@ -8,27 +8,55 @@ import {
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BottomNav } from './src/components/BottomNav';
 import { AnimatedScreen } from './src/components/Motion';
 import { ScreenFrame } from './src/components/ScreenFrame';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { emptyAppState } from './src/data/goodpint';
+import { ClaimSheet } from './src/components/wallet/ClaimSheet';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { BuyDrinkScreen } from './src/screens/BuyDrinkScreen';
 import { ExploreScreen } from './src/screens/ExploreScreen';
 import { PlanScreen } from './src/screens/PlanScreen';
 import { PointsScreen } from './src/screens/PointsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
-import { RedeemScreen } from './src/screens/RedeemScreen';
 import { WalletScreen } from './src/screens/WalletScreen';
-import { ApiError, createOrder, getAppState, getRatings, getUserRatings, newIdempotencyKey, redeemReward, submitReview, topUpWallet } from './src/services/api';
+import {
+  ApiError,
+  createOrder,
+  getAppState,
+  getRatings,
+  getUserRatings,
+  getVouchers,
+  newIdempotencyKey,
+  redeemReward,
+  submitReview,
+  topUpWallet,
+} from './src/services/api';
 import { colors } from './src/theme';
-import type { AppStatePayload, CartItem, FilterKey, OsmPub, RatingMap, TabKey, Transaction, Voucher, WalletState } from './src/types';
+import type {
+  AppLoadStatus,
+  AppStatePayload,
+  CartItem,
+  ClaimResult,
+  FilterKey,
+  OsmPub,
+  RatingMap,
+  RecentEarn,
+  TabKey,
+  Transaction,
+  Voucher,
+  WalletState,
+} from './src/types';
 import { fetchNearbyPubs } from './src/utils/pubs';
+import { crossedReward } from './src/utils/rewards';
 
-type NestedRoute = { name: 'redeem'; rewardId: string } | { name: 'buy'; venueId: string; pubName: string } | null;
+type NestedRoute = { name: 'buy'; venueId: string; pubName: string } | null;
+
+// A scan at the bar this recent is still worth celebrating when it is noticed.
+const CELEBRATE_WITHIN_MS = 30 * 60_000;
 
 function nowTransaction(title: string, amount: number): Transaction {
   return {
@@ -36,6 +64,7 @@ function nowTransaction(title: string, amount: number): Transaction {
     title,
     amount,
     timestamp: 'Just now',
+    createdAt: new Date().toISOString(),
   };
 }
 
@@ -112,29 +141,52 @@ function MainApp() {
   // replays that result instead of placing a second order; a fresh key per
   // attempt would defeat the whole mechanism.
   const orderKeyRef = useRef<string | null>(null);
-  const [secondsRemaining, setSecondsRemaining] = useState(299);
-  const [activeVoucher, setActiveVoucher] = useState<Voucher | null>(null);
+  // Until the first load lands, the seeded empty state is not the user's real
+  // wallet, so screens that would show "0 pts" or "no vouchers" wait for this.
+  const [appStatus, setAppStatus] = useState<AppLoadStatus>('loading');
+  // Kept after closing so the sheet's content survives its exit animation.
+  const [claim, setClaim] = useState<{ rewardId: string; open: boolean } | null>(null);
+  // Wallet moments: a voucher just claimed, a voucher just scanned at the bar,
+  // points just earned. Cleared when the user leaves the Wallet tab.
+  const [freshVoucherId, setFreshVoucherId] = useState<string | null>(null);
+  const [justRedeemedId, setJustRedeemedId] = useState<string | null>(null);
+  const [recentEarn, setRecentEarn] = useState<RecentEarn | null>(null);
+  // Held across a retry of the same reward only after a failure that may have
+  // landed, so the server replays the first success instead of spending twice.
+  const redeemKeyRef = useRef<{ rewardId: string; key: string } | null>(null);
+  // Bumped by every successful claim, so a voucher refresh already in flight
+  // cannot overwrite the list with one that lacks the new voucher.
+  const voucherWriteSeq = useRef(0);
+  const vouchersRef = useRef(data.vouchers);
+  const mountedRef = useRef(true);
+  useEffect(() => { vouchersRef.current = data.vouchers; }, [data.vouchers]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const reloadAppState = useCallback(async () => {
+    setAppStatus('loading');
+    try {
+      const remoteState = await getAppState();
+      if (!mountedRef.current) return;
+      setData(remoteState);
+      setPoints(remoteState.points);
+      setWallet(remoteState.wallet);
+      setTransactions(remoteState.transactions);
+      if (remoteState.drinks[0]) {
+        setCart([{ drinkId: remoteState.drinks[0].id, quantity: 1 }]);
+      }
+      setAppStatus('ready');
+    } catch {
+      if (mountedRef.current) setAppStatus('error');
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
 
-    getAppState()
-      .then((remoteState) => {
-        if (!mounted) {
-          return;
-        }
-
-        setData(remoteState);
-        setPoints(remoteState.points);
-        setWallet(remoteState.wallet);
-        setTransactions(remoteState.transactions);
-        if (remoteState.drinks[0]) {
-          setCart([{ drinkId: remoteState.drinks[0].id, quantity: 1 }]);
-        }
-      })
-      .catch(() => {
-        // Leave the seeded empty state in place if the API is unreachable.
-      });
+    void reloadAppState();
 
     getRatings()
       .then((remoteRatings) => {
@@ -153,7 +205,7 @@ function MainApp() {
     return () => {
       mounted = false;
     };
-  }, [user]);
+  }, [user, reloadAppState]);
 
   const handleSubmitReview = async (pubId: string, rating: number, pubName: string, note?: string) => {
     const prevUserRating = userRatings[pubId];
@@ -241,20 +293,6 @@ function MainApp() {
     if (userCoords) void loadPubs(userCoords.lat, userCoords.lon);
   };
 
-  useEffect(() => {
-    if (route?.name !== 'redeem') {
-      return;
-    }
-
-    setSecondsRemaining(299);
-    const timer = setInterval(() => {
-      setSecondsRemaining((current) => Math.max(current - 1, 0));
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [route]);
-
-  const selectedReward = route?.name === 'redeem' ? data.rewards.find((reward) => reward.id === route.rewardId) : undefined;
   const selectedVenue = route?.name === 'buy'
     ? (data.venues.find((venue) => venue.id === route.venueId) ?? { ...data.venues[0], id: route.venueId, name: route.pubName })
     : data.venues[0];
@@ -284,33 +322,108 @@ function MainApp() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  // Redeem a reward against the server, then show the issued voucher.
-  const openRedeem = async (rewardId?: string) => {
-    const nextRewardId = rewardId || data.rewards[0]?.id;
-    if (!nextRewardId) {
-      return;
-    }
-
-    const reward = data.rewards.find((candidate) => candidate.id === nextRewardId);
-    if (reward && points < reward.points) {
-      Alert.alert('Not enough points', `You need ${reward.points} points to redeem ${reward.title}.`);
-      return;
-    }
-
+  // Re-reads vouchers, quietly: a failure keeps what is on screen. A voucher
+  // that has just gone from active to redeemed was scanned at the bar, and the
+  // Wallet celebrates it if the user is looking.
+  const refreshVouchers = useCallback(async () => {
+    const seq = voucherWriteSeq.current;
+    let list: Voucher[];
     try {
-      const result = await redeemReward({ rewardId: nextRewardId });
-      setPoints(result.points);
-      setActiveVoucher(result.voucher);
-      setData((current) => ({ ...current, vouchers: [result.voucher, ...current.vouchers] }));
+      list = await getVouchers();
     } catch {
-      Alert.alert('Could not redeem', 'Something went wrong redeeming that reward. Please try again.');
       return;
     }
+    if (!mountedRef.current || seq !== voucherWriteSeq.current) return;
 
-    setSwipeDirection(null);
-    setActiveTab('points');
-    setRoute({ name: 'redeem', rewardId: nextRewardId });
+    const before = new Map(vouchersRef.current.map((voucher) => [voucher.id, voucher.status]));
+    const now = Date.now();
+    const justUsed = list
+      .filter(
+        (voucher) =>
+          voucher.status === 'redeemed' &&
+          before.get(voucher.id) === 'active' &&
+          voucher.redeemedAt !== null &&
+          now - Date.parse(voucher.redeemedAt) < CELEBRATE_WITHIN_MS,
+      )
+      .sort((a, b) => (b.redeemedAt ?? '').localeCompare(a.redeemedAt ?? ''))[0];
+
+    setData((current) => ({ ...current, vouchers: list }));
+    if (justUsed && activeTabRef.current === 'wallet') {
+      setJustRedeemedId(justUsed.id);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  }, []);
+
+  // Refreshed here rather than in the Wallet screen, which mounts more than
+  // once during a tab slide.
+  useEffect(() => {
+    if (activeTab === 'wallet' && appStatus === 'ready') void refreshVouchers();
+  }, [activeTab, appStatus, refreshVouchers]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && activeTabRef.current === 'wallet') void refreshVouchers();
+    });
+    // react-native-web returns nothing when the visibility API is unavailable.
+    return () => subscription?.remove();
+  }, [refreshVouchers]);
+
+  useEffect(() => {
+    if (activeTab === 'wallet') return;
+    setFreshVoucherId(null);
+    setRecentEarn(null);
+    setJustRedeemedId(null);
+  }, [activeTab]);
+
+  const requestClaim = (rewardId: string) => {
+    if (!data.rewards.some((reward) => reward.id === rewardId)) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setClaim({ rewardId, open: true });
+  };
+
+  // Always resolves, so the claim sheet can show a refusal inline.
+  const confirmClaim = async (rewardId: string): Promise<ClaimResult> => {
+    if (isSubmitting) {
+      return { ok: false, message: 'Another payment is still going through. Try again in a moment.' };
+    }
+
+    const key = redeemKeyRef.current?.rewardId === rewardId ? redeemKeyRef.current.key : newIdempotencyKey();
+    redeemKeyRef.current = { rewardId, key };
+
+    setIsSubmitting(true);
+    try {
+      const result = await redeemReward({ rewardId }, key);
+      redeemKeyRef.current = null;
+      voucherWriteSeq.current += 1;
+      setPoints(result.points);
+      setData((current) => ({
+        ...current,
+        vouchers: [result.voucher, ...current.vouchers.filter((voucher) => voucher.id !== result.voucher.id)],
+      }));
+      setFreshVoucherId(result.voucher.id);
+      // The claim is now the latest moment; an earlier scan or order gives way.
+      setJustRedeemedId(null);
+      setRecentEarn(null);
+      setClaim((current) => current && { ...current, open: false });
+      if (activeTabRef.current !== 'wallet') changeTab('wallet');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return { ok: true };
+    } catch (error) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+        // The server stores refusals against the key too, so a retry needs a
+        // fresh one or it would only replay the same refusal.
+        redeemKeyRef.current = null;
+        const serverPoints = error.details?.points;
+        if (error.status === 402 && typeof serverPoints === 'number') setPoints(serverPoints);
+      }
+      return {
+        ok: false,
+        message: error instanceof ApiError ? error.message : 'Couldn’t add this reward. Your points haven’t been spent.',
+      };
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const openBuy = (venueId: string, pubName: string) => {
@@ -354,7 +467,7 @@ function MainApp() {
     // A courtesy check so the common case fails fast and locally; the server
     // enforces the real one against the authoritative balance.
     if (wallet.balance < cartTotal) {
-      Alert.alert('Top up wallet', 'Add funds to your GoodPint Card before placing this order.');
+      Alert.alert('Top up wallet', 'Add money to your GoodPint balance in the Wallet tab before placing this order.');
       return;
     }
 
@@ -371,11 +484,21 @@ function MainApp() {
         nowTransaction(selectedVenue.name, -cartTotal),
         ...currentTransactions,
       ]);
+      // The membership pass confirms the order and counts the points up, in
+      // place of an Alert (which react-native-web never shows).
+      setRecentEarn(
+        result.pointsEarned > 0
+          ? {
+              points: result.pointsEarned,
+              venueName: selectedVenue.name,
+              unlockedRewardId: crossedReward(result.points - result.pointsEarned, result.points, data.rewards)?.id ?? null,
+            }
+          : null,
+      );
       setSwipeDirection(null);
       setRoute(null);
       setActiveTab('wallet');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Drink booked', `Your order at ${selectedVenue.name} is ready for pickup soon.`);
     } catch (error) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert(
@@ -387,9 +510,10 @@ function MainApp() {
     }
   };
 
-  const topUp = async () => {
-    if (isSubmitting) return;
-    const amount = 25;
+  // Resolves true once the server has credited the wallet, so the top-up sheet
+  // only celebrates money that actually arrived.
+  const topUp = async (amount: number): Promise<boolean> => {
+    if (isSubmitting) return false;
 
     setIsSubmitting(true);
     try {
@@ -397,12 +521,14 @@ function MainApp() {
       setWallet((currentWallet) => ({ ...currentWallet, balance: result.balance }));
       setTransactions((currentTransactions) => [nowTransaction('Wallet top up', amount), ...currentTransactions]);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return true;
     } catch (error) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert(
         'Top up failed',
         error instanceof ApiError ? error.message : 'Something went wrong. Your card has not been charged.',
       );
+      return false;
     } finally {
       setIsSubmitting(false);
     }
@@ -421,17 +547,7 @@ function MainApp() {
 
   let content;
 
-  if (route?.name === 'redeem') {
-    content = (
-      <RedeemScreen
-        points={points}
-        reward={selectedReward}
-        voucher={activeVoucher}
-        secondsRemaining={secondsRemaining}
-        onBack={goBack}
-      />
-    );
-  } else if (route?.name === 'buy') {
+  if (route?.name === 'buy') {
     content = (
       <BuyDrinkScreen
         venue={selectedVenue}
@@ -450,8 +566,8 @@ function MainApp() {
         rewards={data.rewards}
         earningRules={data.earningRules}
         tiers={data.tiers}
-        onOpenRedeem={openRedeem}
-        onOpenHistory={() => changeTab('wallet')}
+        onClaimReward={requestClaim}
+        onOpenVouchers={() => changeTab('wallet')}
       />
     );
   } else if (activeTab === 'plan') {
@@ -467,10 +583,27 @@ function MainApp() {
   } else if (activeTab === 'wallet') {
     content = (
       <WalletScreen
+        status={appStatus}
         wallet={wallet}
-        passes={data.passes}
+        points={points}
+        tiers={data.tiers}
+        rewards={data.rewards}
+        drinks={data.drinks}
+        venues={data.venues}
+        holderName={data.profile.name}
+        memberSince={data.profile.joinedLabel}
         vouchers={data.vouchers}
         transactions={transactions}
+        freshVoucherId={freshVoucherId}
+        justRedeemedId={justRedeemedId}
+        recentEarn={recentEarn}
+        onClaim={requestClaim}
+        onBrowseRewards={() => changeTab('points')}
+        onOrderAgain={openBuy}
+        onFindDrink={() => changeTab('explore')}
+        onRefreshVouchers={refreshVouchers}
+        onDismissRedeemed={() => setJustRedeemedId(null)}
+        onRetry={() => void reloadAppState()}
         onTopUp={topUp}
       />
     );
@@ -488,7 +621,7 @@ function MainApp() {
       <ExploreScreen
         selectedFilter={selectedFilter}
         onFilterChange={setSelectedFilter}
-        onOpenRedeem={() => openRedeem()}
+        onOpenRewards={() => changeTab('points')}
         locationStatus={locationStatus}
         userCoords={userCoords}
         osmPubs={osmPubs}
@@ -504,7 +637,7 @@ function MainApp() {
     );
   }
 
-  const animationKey = route ? `${route.name}-${route.name === 'buy' ? route.venueId : route.rewardId}` : activeTab;
+  const animationKey = route ? `buy-${route.venueId}` : activeTab;
 
   const swipeLeft = route ? undefined : () => {
     const idx = TAB_ORDER.indexOf(activeTabRef.current);
@@ -517,9 +650,20 @@ function MainApp() {
   };
 
   return (
-    <ScreenFrame bottomNav={bottomNav} scrollKey={animationKey} onSwipeLeft={swipeLeft} onSwipeRight={swipeRight}>
-      <AnimatedScreen animationKey={animationKey} variant={route ? 'push' : 'tab'} direction={route ? null : swipeDirection}>{content}</AnimatedScreen>
-    </ScreenFrame>
+    <>
+      <ScreenFrame bottomNav={bottomNav} scrollKey={animationKey} onSwipeLeft={swipeLeft} onSwipeRight={swipeRight}>
+        <AnimatedScreen animationKey={animationKey} variant={route ? 'push' : 'tab'} direction={route ? null : swipeDirection}>{content}</AnimatedScreen>
+      </ScreenFrame>
+      {/* Hosted here so both the Points and Wallet tabs share it and tab
+          animations never remount it mid-claim. */}
+      <ClaimSheet
+        visible={!!claim?.open}
+        reward={data.rewards.find((reward) => reward.id === claim?.rewardId) ?? null}
+        points={points}
+        onClose={() => setClaim((current) => current && { ...current, open: false })}
+        onConfirm={confirmClaim}
+      />
+    </>
   );
 }
 

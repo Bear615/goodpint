@@ -1,3 +1,5 @@
+import type { Tier } from './types';
+
 export const colors = {
   background: '#050607',
   backgroundWarm: '#090A0B',
@@ -22,6 +24,13 @@ export const colors = {
   success: '#6EE7A7',
   mapBlue: '#4D8DFF',
   mapGreen: '#111716',
+};
+
+// Tier is shown as an accent only; the membership pass itself stays gold.
+export const tierAccent: Record<Tier['id'], string> = {
+  bronze: '#D69A6A',
+  silver: '#C9CED6',
+  gold: colors.gold,
 };
 
 export const radii = {

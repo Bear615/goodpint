@@ -53,7 +53,8 @@ const sectionTitles: Record<FilterKey, string> = {
 interface ExploreScreenProps {
   selectedFilter: FilterKey;
   onFilterChange: (filter: FilterKey) => void;
-  onOpenRedeem: () => void;
+  // The points chip and promo go to the Points tab; nothing is spent from here.
+  onOpenRewards: () => void;
   locationStatus: 'pending' | 'granted' | 'denied';
   userCoords: { lat: number; lon: number } | null;
   osmPubs: OsmPub[];
@@ -70,7 +71,7 @@ interface ExploreScreenProps {
 export function ExploreScreen({
   selectedFilter,
   onFilterChange,
-  onOpenRedeem,
+  onOpenRewards,
   locationStatus,
   userCoords,
   osmPubs,
@@ -227,7 +228,7 @@ export function ExploreScreen({
         </View>
         <PressableScale
           accessibilityLabel={`${formatPoints(points)} points. Open rewards`}
-          onPress={onOpenRedeem}
+          onPress={onOpenRewards}
           pressedScale={0.95}
         >
           <View style={styles.pointsChip}>
@@ -334,7 +335,7 @@ export function ExploreScreen({
         {listContent}
       </View>
 
-      <PressableScale accessibilityLabel="Open rewards" onPress={onOpenRedeem} style={styles.promoWrap} pressedScale={0.98}>
+      <PressableScale accessibilityLabel="Open rewards" onPress={onOpenRewards} style={styles.promoWrap} pressedScale={0.98}>
         <LinearGradient
           colors={['rgba(244,200,74,0.16)', 'rgba(244,200,74,0.04)']}
           start={{ x: 0, y: 0 }}
