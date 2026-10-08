@@ -9,12 +9,13 @@ interface GoldButtonProps {
   iconRight?: ReactNode;
   style?: ViewStyle;
   compact?: boolean;
+  disabled?: boolean;
   testID?: string;
 }
 
-export function GoldButton({ label, onPress, iconRight, style, compact, testID }: GoldButtonProps) {
+export function GoldButton({ label, onPress, iconRight, style, compact, disabled, testID }: GoldButtonProps) {
   return (
-    <PressableScale onPress={onPress} style={style} pressedScale={0.975} testID={testID}>
+    <PressableScale onPress={onPress} style={style} pressedScale={0.975} disabled={disabled} testID={testID}>
       <View style={[styles.fill, !compact && styles.full, compact && styles.compact]}>
         <Text style={[styles.label, compact && styles.compactLabel]} numberOfLines={1}>
           {label}

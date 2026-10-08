@@ -61,10 +61,15 @@ const REQUEST_TIMEOUT_MS = 15_000;
 // Thrown for non-2xx responses so callers can branch on status (e.g. 401).
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  // The parsed JSON error body, when there was one. A 402 from /api/redeem, for
+  // instance, carries the server's current points so the client can correct
+  // a stale balance instead of offering a retry that cannot succeed.
+  details?: Record<string, unknown>;
+  constructor(status: number, message: string, details?: Record<string, unknown>) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -142,14 +147,16 @@ async function request<T>(path: string, init?: RequestOptions): Promise<T> {
 
   if (!response.ok) {
     let message = `GoodPint API error ${response.status}`;
+    let details: Record<string, unknown> | undefined;
     try {
       const body = await response.json();
       if (typeof body?.error === 'string') message = body.error;
+      if (body && typeof body === 'object') details = body as Record<string, unknown>;
     } catch {
       // Non-JSON error body — keep the default message.
     }
     if (response.status === 401 && init?.auth !== false) onUnauthorized?.();
-    throw new ApiError(response.status, message);
+    throw new ApiError(response.status, message, details);
   }
 
   return (await response.json()) as T;
