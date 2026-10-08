@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image, Animated, Easing, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Beer, Gift, MessageSquareText, Star, UserPlus } from 'lucide-react-native';
 import { colors, font, formatPoints, radii } from '../theme';
 import type { EarningRule, Reward, Tier } from '../types';
 import { GoldButton } from '../components/GoldButton';
+import { MembershipCard, MembershipPill } from '../components/MembershipCard';
 import { PressableScale } from '../components/Motion';
 import { SectionCard } from '../components/SectionCard';
 
@@ -22,6 +23,7 @@ const ruleIcons = [Star, Beer, UserPlus, MessageSquareText];
 
 export function PointsScreen({ points, rewards, earningRules, tiers, onClaimReward, onOpenVouchers }: PointsScreenProps) {
   const progressValue = useRef(new Animated.Value(0)).current;
+  const [cardOpen, setCardOpen] = useState(false);
 
   // Sort tiers ascending by threshold so current/next logic doesn't depend on prop order.
   const sortedTiers = [...tiers].sort((a, b) => a.points - b.points);
@@ -57,27 +59,25 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onClaimRewa
 
   return (
     <View>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Your Points</Text>
-        <PressableScale accessibilityLabel="My vouchers in Wallet" onPress={onOpenVouchers}>
-          <Text style={styles.history}>My vouchers</Text>
-        </PressableScale>
-      </View>
-
       <LinearGradient
-        colors={['rgba(255,255,255,0.058)', 'rgba(244,200,74,0.055)', 'rgba(255,255,255,0.026)']}
+        colors={[colors.brandBright, colors.brand, colors.brandDeep]}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        end={{ x: 0.6, y: 1 }}
         style={styles.hero}
       >
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>Rewards</Text>
+          <MembershipPill onPress={() => setCardOpen(true)} />
+        </View>
+
         <View style={styles.pointsRow}>
           <View>
             <Text style={styles.points}>{formatPoints(points)}</Text>
-            <Text style={styles.subtitle}>GoodPint Points</Text>
+            <Text style={styles.subtitle}>points to spend</Text>
           </View>
-          <View style={styles.coin}>
-            <Beer color={colors.gold} size={30} strokeWidth={2} />
-          </View>
+          <PressableScale accessibilityLabel="My vouchers in Wallet" onPress={onOpenVouchers}>
+            <Text style={styles.history}>My vouchers</Text>
+          </PressableScale>
         </View>
 
         <View style={styles.progressMeta}>
@@ -100,8 +100,8 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onClaimRewa
             return (
               <View key={tier.id} style={[styles.tierItem, active && styles.tierItemActive]}>
                 <Star
-                  color={active ? colors.gold : colors.textMuted}
-                  fill={active ? colors.gold : 'rgba(255,255,255,0.18)'}
+                  color={active ? colors.gold : 'rgba(243,235,221,0.55)'}
+                  fill={active ? colors.gold : 'rgba(243,235,221,0.14)'}
                   size={34}
                   strokeWidth={1.8}
                 />
@@ -113,7 +113,7 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onClaimRewa
         </View>
       </LinearGradient>
 
-      <Text style={styles.sectionTitle}>Ways to Earn</Text>
+      <Text style={styles.sectionTitle}>Ways to earn</Text>
       <SectionCard>
         {earningRules.map((rule, index) => {
           const Icon = ruleIcons[index] ?? Star;
@@ -129,7 +129,7 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onClaimRewa
         })}
       </SectionCard>
 
-      <Text style={styles.sectionTitle}>Redeem Points</Text>
+      <Text style={styles.sectionTitle}>Spend your points</Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rewardList}>
         {rewards.map((reward) => (
@@ -157,11 +157,25 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onClaimRewa
           </View>
         </View>
       </SectionCard>
+
+      <MembershipCard visible={cardOpen} onClose={() => setCardOpen(false)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // Bleeds past ScreenFrame's padding to the screen edges, with a deep curve
+  // underneath, so the screen opens on solid brand colour instead of a card.
+  hero: {
+    marginHorizontal: -22,
+    marginTop: -14,
+    paddingHorizontal: 22,
+    paddingTop: 10,
+    paddingBottom: 26,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    overflow: 'hidden',
+  },
   headerRow: {
     minHeight: 60,
     flexDirection: 'row',
@@ -169,63 +183,54 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   title: {
-    color: colors.text,
-    fontFamily: font.semibold,
-    fontSize: 18,
-    letterSpacing: -0.3,
+    color: colors.cream,
+    fontFamily: font.bold,
+    fontSize: 26,
+    letterSpacing: -0.8,
   },
   history: {
-    color: colors.gold,
+    color: colors.cream,
     fontFamily: font.medium,
     fontSize: 14,
-  },
-  hero: {
-    padding: 18,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
+    textDecorationLine: 'underline',
   },
   pointsRow: {
+    marginTop: 6,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: 10,
   },
   points: {
-    color: colors.gold,
+    color: colors.cream,
     fontFamily: font.bold,
-    fontSize: 52,
-    letterSpacing: -2,
-  },
-  coin: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontSize: 56,
+    letterSpacing: -2.4,
   },
   subtitle: {
     marginTop: -4,
-    color: colors.textMuted,
+    color: colors.cream,
+    opacity: 0.75,
     fontFamily: font.regular,
-    fontSize: 16,
+    fontSize: 15,
   },
   progressMeta: {
-    marginTop: 18,
+    marginTop: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   progressText: {
-    color: colors.textMuted,
+    color: colors.cream,
+    opacity: 0.8,
     fontFamily: font.regular,
     fontSize: 12,
   },
   progressTrack: {
-    height: 7,
+    height: 8,
     borderRadius: 4,
     overflow: 'hidden',
     marginTop: 8,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(8,16,13,0.35)',
   },
   progressFill: {
     height: '100%',
@@ -233,38 +238,36 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gold,
   },
   tierRow: {
-    marginTop: 22,
+    marginTop: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 8,
   },
   tierItem: {
     flex: 1,
-    minHeight: 92,
+    minHeight: 88,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(255,255,255,0.026)',
+    borderRadius: radii.md,
+    backgroundColor: 'rgba(8,16,13,0.22)',
   },
   tierItemActive: {
-    borderColor: 'rgba(255,211,77,0.33)',
-    backgroundColor: 'rgba(244,200,74,0.07)',
+    backgroundColor: 'rgba(8,16,13,0.42)',
   },
   tierName: {
-    color: colors.text,
-    fontFamily: font.regular,
+    color: colors.cream,
+    fontFamily: font.medium,
     fontSize: 14,
   },
   tierPoints: {
-    color: colors.textMuted,
+    color: colors.cream,
+    opacity: 0.7,
     fontFamily: font.regular,
     fontSize: 12,
   },
   sectionTitle: {
-    marginTop: 26,
+    marginTop: 28,
     marginBottom: 10,
     color: colors.text,
     fontFamily: font.semibold,

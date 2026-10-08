@@ -97,7 +97,7 @@ export function BuyDrinkScreen({
 
       <View style={styles.divider} />
 
-      <Text style={styles.sectionTitle}>Your Order</Text>
+      <Text style={styles.sectionTitle}>Your order</Text>
       {orderedDrinks.length > 0 ? (
         orderedDrinks.map((drink) => (
           <View key={drink.id} style={styles.orderRow}>

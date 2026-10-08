@@ -36,16 +36,16 @@ function venueForStop(stop: TripStop, venues: Venue[]) {
 }
 
 function routeHeading(dates: string | undefined): string {
-  if (!dates) return 'Your Route';
+  if (!dates) return 'Your route';
   const start = dates.split(' - ')[0] ?? '';
-  if (start.toLowerCase().includes('sat')) return 'Saturday Route';
-  if (start.toLowerCase().includes('sun')) return 'Sunday Route';
-  if (start.toLowerCase().includes('fri')) return 'Friday Route';
-  if (start.toLowerCase().includes('thu')) return 'Thursday Route';
-  if (start.toLowerCase().includes('wed')) return 'Wednesday Route';
-  if (start.toLowerCase().includes('tue')) return 'Tuesday Route';
-  if (start.toLowerCase().includes('mon')) return 'Monday Route';
-  return 'Your Route';
+  if (start.toLowerCase().includes('sat')) return 'Saturday route';
+  if (start.toLowerCase().includes('sun')) return 'Sunday route';
+  if (start.toLowerCase().includes('fri')) return 'Friday route';
+  if (start.toLowerCase().includes('thu')) return 'Thursday route';
+  if (start.toLowerCase().includes('wed')) return 'Wednesday route';
+  if (start.toLowerCase().includes('tue')) return 'Tuesday route';
+  if (start.toLowerCase().includes('mon')) return 'Monday route';
+  return 'Your route';
 }
 
 type PlanTab = 'itinerary' | 'group' | 'notes';
@@ -70,7 +70,7 @@ export function PlanScreen({ trips, venues, onInviteFriends, onAddStop, onOpenBu
         <View style={styles.header}>
           <View>
             <Text style={styles.eyebrow}>Plan</Text>
-            <Text style={styles.title}>Weekend Plan</Text>
+            <Text style={styles.title}>Weekend plan</Text>
           </View>
           <PressableScale accessibilityLabel="Invite group" onPress={onInviteFriends} style={styles.headerButton}>
             <UsersRound color={colors.gold} size={22} strokeWidth={2} />
@@ -86,7 +86,7 @@ export function PlanScreen({ trips, venues, onInviteFriends, onAddStop, onOpenBu
           <View style={styles.emptyCommandRow}>
             <PressableScale accessibilityLabel="Add stop" style={styles.addStop} pressedScale={0.975} onPress={onAddStop}>
               <Plus color={colors.gold} size={21} strokeWidth={2.2} />
-              <Text style={styles.addStopText}>Add Stop</Text>
+              <Text style={styles.addStopText}>Add stop</Text>
             </PressableScale>
             <GoldButton label="Invite" compact onPress={onInviteFriends} style={styles.inviteButton} />
           </View>
@@ -100,7 +100,7 @@ export function PlanScreen({ trips, venues, onInviteFriends, onAddStop, onOpenBu
       <View style={styles.header}>
         <View>
           <Text style={styles.eyebrow}>Plan</Text>
-          <Text style={styles.title}>{trip?.title ?? 'Weekend Plan'}</Text>
+          <Text style={styles.title}>{trip?.title ?? 'Weekend plan'}</Text>
         </View>
         <PressableScale accessibilityLabel="Invite group" onPress={onInviteFriends} style={styles.headerButton}>
           <UsersRound color={colors.gold} size={22} strokeWidth={2} />
@@ -182,7 +182,7 @@ export function PlanScreen({ trips, venues, onInviteFriends, onAddStop, onOpenBu
           <View style={styles.commandRow}>
             <PressableScale accessibilityLabel="Add stop" style={styles.addStop} pressedScale={0.975} onPress={onAddStop}>
               <Plus color={colors.gold} size={21} strokeWidth={2.2} />
-              <Text style={styles.addStopText}>Add Stop</Text>
+              <Text style={styles.addStopText}>Add stop</Text>
             </PressableScale>
             <GoldButton label="Invite" compact onPress={onInviteFriends} style={styles.inviteButton} />
             <PressableScale accessibilityLabel="Share trip" onPress={onInviteFriends} style={styles.shareButton}>
