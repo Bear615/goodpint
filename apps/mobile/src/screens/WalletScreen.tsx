@@ -1,138 +1,302 @@
 import * as Haptics from 'expo-haptics';
 import type { ReactNode } from 'react';
-import { useCallback, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
-import { Beer, ChevronRight, CreditCard, Gift, Plus, Star, type LucideIcon } from 'lucide-react-native';
-import { colors, font, formatPoints } from '../theme';
-import type { Pass, Transaction, Voucher, WalletState } from '../types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
+import { CircleAlert, Gift, Ticket } from 'lucide-react-native';
+import { colors, font, formatPoints, radii } from '../theme';
+import type {
+  AppLoadStatus,
+  Drink,
+  RecentEarn,
+  Reward,
+  Tier,
+  Transaction,
+  Venue,
+  Voucher,
+  WalletState,
+} from '../types';
+import { GoldButton } from '../components/GoldButton';
 import { PressableScale } from '../components/Motion';
 import { SectionCard } from '../components/SectionCard';
-import { ActivityList } from '../components/wallet/ActivityList';
-import { SpendingInsights } from '../components/wallet/SpendingInsights';
-import { TopUpSheet } from '../components/wallet/TopUpSheet';
-import { VoucherStack } from '../components/wallet/VoucherStack';
-import { WalletCard } from '../components/wallet/WalletCard';
+import { BalanceRow } from '../components/wallet/BalanceRow';
+import { MembershipPass } from '../components/wallet/MembershipPass';
+import { PassDetailsSheet } from '../components/wallet/PassDetailsSheet';
+import { passAnimation } from '../components/wallet/passMetrics';
+import { PassStack } from '../components/wallet/PassStack';
+import { RewardHistory } from '../components/wallet/RewardHistory';
+import { VoucherPass } from '../components/wallet/VoucherPass';
+import {
+  byExpiry,
+  currentTier,
+  defaultOpenId,
+  isVoucherLive,
+  lastOrderedVenue,
+  MEMBER_PASS_ID,
+  rewardProgress,
+} from '../utils/rewards';
+import { useReducedMotion } from '../utils/useReducedMotion';
+
+// While a voucher's QR is open, check now and then whether the bar has scanned
+// it, so the pass can celebrate. Bounded so a forgotten phone stops asking.
+const POLL_INTERVAL_MS = 15_000;
+const POLL_WINDOW_MS = 5 * 60_000;
 
 interface WalletScreenProps {
+  status: AppLoadStatus;
   wallet: WalletState;
   points: number;
+  tiers: Tier[];
+  rewards: Reward[];
+  drinks: Drink[];
+  venues: Venue[];
   holderName: string;
-  passes: Pass[];
-  // Redeemed rewards the user can present at a pub.
-  vouchers?: Voucher[];
+  memberSince: string;
+  vouchers: Voucher[];
   transactions: Transaction[];
+  // Moments App tracks while the user is on this tab.
+  freshVoucherId: string | null;
+  justRedeemedId: string | null;
+  recentEarn: RecentEarn | null;
+  onClaim: (rewardId: string) => void;
+  onBrowseRewards: () => void;
+  onOrderAgain: (venueId: string, pubName: string) => void;
+  onFindDrink: () => void;
+  onRefreshVouchers: () => Promise<void>;
+  onDismissRedeemed: () => void;
+  onRetry: () => void;
   /** Resolves true once the server has credited the wallet. */
   onTopUp: (amount: number) => Promise<boolean>;
-  onOpenRewards: () => void;
-  onOpenExplore: () => void;
 }
 
 export function WalletScreen({
+  status,
   wallet,
   points,
+  tiers,
+  rewards,
+  drinks,
+  venues,
   holderName,
-  passes,
-  vouchers = [],
+  memberSince,
+  vouchers,
   transactions,
+  freshVoucherId,
+  justRedeemedId,
+  recentEarn,
+  onClaim,
+  onBrowseRewards,
+  onOrderAgain,
+  onFindDrink,
+  onRefreshVouchers,
+  onDismissRedeemed,
+  onRetry,
   onTopUp,
-  onOpenRewards,
-  onOpenExplore,
 }: WalletScreenProps) {
-  const [hidden, setHidden] = useState(false);
-  const [flipped, setFlipped] = useState(false);
-  const [topUpOpen, setTopUpOpen] = useState(false);
-  const closeTopUp = useCallback(() => setTopUpOpen(false), []);
+  const reducedMotion = useReducedMotion();
+  // undefined means "whatever the default rule picks"; null means all closed.
+  const [openId, setOpenId] = useState<string | null | undefined>(undefined);
+  const [detailsVoucher, setDetailsVoucher] = useState<Voucher | null>(null);
+  // Held separately so the sheet keeps its content while it animates away.
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
-  const hasCard = wallet.cardLast4.length > 0;
   const now = Date.now();
-  const readyCount =
-    passes.filter((pass) => pass.status !== 'Used').length +
-    vouchers.filter(
-      (voucher) => voucher.status === 'active' && (!voucher.expiresAt || new Date(voucher.expiresAt).getTime() > now),
-    ).length;
+  const liveVouchers = vouchers.filter((voucher) => isVoucherLive(voucher, now)).sort(byExpiry);
+  const celebrating = justRedeemedId ? vouchers.find((voucher) => voucher.id === justRedeemedId) : undefined;
+  // A voucher just scanned at the bar stays in the stack to celebrate.
+  const stackVouchers =
+    celebrating && !liveVouchers.includes(celebrating) ? [...liveVouchers, celebrating].sort(byExpiry) : liveVouchers;
+  const ids = [MEMBER_PASS_ID, ...stackVouchers.map((voucher) => voucher.id)];
 
-  const flip = () => {
+  const effectiveOpenId =
+    openId === undefined || (openId !== null && !ids.includes(openId))
+      ? defaultOpenId({ stack: stackVouchers, justRedeemedId, freshVoucherId, recentEarn })
+      : openId;
+
+  // A new voucher or a scan at the bar takes over the stack. Compared against
+  // the previous value so a remount does not replay it.
+  const lastFresh = useRef(freshVoucherId);
+  useEffect(() => {
+    if (freshVoucherId && freshVoucherId !== lastFresh.current) {
+      passAnimation();
+      setOpenId(undefined);
+    }
+    lastFresh.current = freshVoucherId;
+  }, [freshVoucherId]);
+
+  const lastRedeemed = useRef(justRedeemedId);
+  useEffect(() => {
+    if (justRedeemedId && justRedeemedId !== lastRedeemed.current) {
+      passAnimation();
+      setOpenId(undefined);
+    }
+    lastRedeemed.current = justRedeemedId;
+  }, [justRedeemedId]);
+
+  // Only while a live voucher's QR is open, only in the foreground, and only
+  // for a few minutes. App already refreshed on the way in, so no fetch here
+  // on start: the screen remounts during a tab slide.
+  const pollId = stackVouchers.some((voucher) => voucher.id === effectiveOpenId && isVoucherLive(voucher, now))
+    ? effectiveOpenId
+    : null;
+  useEffect(() => {
+    if (!pollId) return;
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - started > POLL_WINDOW_MS) {
+        clearInterval(timer);
+        return;
+      }
+      if (AppState.currentState !== 'active') return;
+      void onRefreshVouchers();
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [pollId, onRefreshVouchers]);
+
+  const balanceTransactions = useMemo(() => transactions.filter((tx) => tx.amount !== 0), [transactions]);
+  const { affordable } = rewardProgress(points, rewards);
+  const pointsUsed = vouchers.reduce((total, voucher) => total + voucher.pointsSpent, 0);
+
+  const toggle = (id: string) => {
+    passAnimation();
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setFlipped((value) => !value);
+    setOpenId(effectiveOpenId === id ? null : id);
   };
 
-  const toggleHidden = () => {
-    void Haptics.selectionAsync();
-    setHidden((value) => !value);
-  };
-
-  const openTopUp = () => {
+  const showDetails = (voucher: Voucher) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setTopUpOpen(true);
+    setDetailsVoucher(voucher);
+    setDetailsOpen(true);
   };
+
+  const empty = (() => {
+    if (vouchers.length > 0) return { title: 'All poured', body: 'Your next voucher will land here.' };
+    if (rewards.length === 0) return { title: 'No vouchers in your wallet', body: 'Your vouchers will appear here.' };
+    if (affordable.length > 0) {
+      return { title: 'No vouchers in your wallet', body: 'Claim a reward above — it lands here, ready to scan at the bar.' };
+    }
+    return { title: 'No vouchers in your wallet', body: 'Earn points, claim a reward, and it lands here ready to scan at the bar.' };
+  })();
 
   return (
     <View>
       <View style={styles.header}>
-        <Text style={styles.title}>Wallet</Text>
-        <PressableScale accessibilityLabel="View rewards" onPress={onOpenRewards} style={styles.pointsPill} pressedScale={0.94}>
-          <View style={styles.pointsPillInner}>
-            <Star color={colors.gold} fill={colors.gold} size={14} />
-            <Text style={styles.pointsText}>{formatPoints(points)} pts</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>Wallet</Text>
+          {status === 'ready' && liveVouchers.length > 0 ? (
+            <View style={styles.readyPill}>
+              <Text style={styles.readyText}>{liveVouchers.length} ready</Text>
+            </View>
+          ) : null}
+        </View>
+        <PressableScale accessibilityLabel="Browse rewards" onPress={onBrowseRewards} style={styles.browse} pressedScale={0.92}>
+          <View style={styles.browseInner}>
+            <Gift color={colors.text} size={18} />
           </View>
         </PressableScale>
       </View>
 
-      <WalletCard
-        balance={wallet.balance}
-        cardLast4={wallet.cardLast4}
-        holderName={holderName}
-        points={points}
-        hidden={hidden}
-        flipped={flipped}
-        onToggleHidden={toggleHidden}
-        onFlip={flip}
-      />
-
-      <View style={styles.actions}>
-        <QuickAction label="Add money" Icon={Plus} primary onPress={openTopUp} />
-        <QuickAction label="Buy a drink" Icon={Beer} onPress={onOpenExplore} />
-        <QuickAction label="Rewards" Icon={Gift} onPress={onOpenRewards} />
-        <QuickAction label={flipped ? 'Card front' : 'Card details'} Icon={CreditCard} onPress={flip} />
-      </View>
-
-      <SectionHeader title="This week" />
-      <SpendingInsights transactions={transactions} hidden={hidden} />
-
-      <SectionHeader
-        title="Passes & vouchers"
-        accessory={readyCount > 0 ? <Text style={styles.readyBadge}>{readyCount} ready</Text> : null}
-      />
-      <VoucherStack vouchers={vouchers} passes={passes} onBrowseRewards={onOpenRewards} />
-
-      <SectionHeader title="Activity" />
-      <ActivityList transactions={transactions} hidden={hidden} />
-
-      <SectionCard style={styles.manage}>
-        <PressableScale
-          accessibilityLabel="Payment methods"
-          onPress={() => Alert.alert('Payment Methods', 'Card management coming soon.')}
-          pressedScale={0.985}
-        >
-          <View style={styles.manageRow}>
-            <View style={styles.manageIcon}>
-              <CreditCard color={colors.text} size={19} />
-            </View>
-            <View style={styles.manageCopy}>
-              <Text style={styles.manageTitle}>Payment methods</Text>
-              <Text style={styles.manageSubtitle}>{hasCard ? `Card ending ${wallet.cardLast4}` : 'No card added yet'}</Text>
-            </View>
-            <ChevronRight color={colors.textMuted} size={20} />
+      {status !== 'ready' ? (
+        <SectionCard>
+          <View style={styles.placeholder}>
+            {status === 'loading' ? (
+              <>
+                <ActivityIndicator color={colors.gold} />
+                <Text style={styles.placeholderText}>Loading your rewards…</Text>
+              </>
+            ) : (
+              <>
+                <CircleAlert color={colors.textSubtle} size={26} />
+                <Text style={styles.placeholderTitle}>Couldn’t load your wallet</Text>
+                <Text style={styles.placeholderText}>Check your connection and try again.</Text>
+                <GoldButton label="Try again" compact onPress={onRetry} style={styles.retry} />
+              </>
+            )}
           </View>
-        </PressableScale>
-      </SectionCard>
+        </SectionCard>
+      ) : (
+        <>
+          <PassStack
+            ids={ids}
+            openId={effectiveOpenId}
+            renderPass={(id, layout) => {
+              if (id === MEMBER_PASS_ID) {
+                return (
+                  <MembershipPass
+                    {...layout}
+                    points={points}
+                    tier={currentTier(points, tiers)}
+                    rewards={rewards}
+                    houseDrink={drinks[0] ?? null}
+                    lastVenue={lastOrderedVenue(transactions, venues)}
+                    holderName={holderName}
+                    memberSince={memberSince}
+                    recentEarn={recentEarn}
+                    reducedMotion={reducedMotion}
+                    onToggle={() => toggle(id)}
+                    onClaim={onClaim}
+                    onBrowseRewards={onBrowseRewards}
+                    onOrderAgain={onOrderAgain}
+                    onFindDrink={onFindDrink}
+                  />
+                );
+              }
+              const voucher = stackVouchers.find((candidate) => candidate.id === id);
+              if (!voucher) return null;
+              return (
+                <VoucherPass
+                  {...layout}
+                  voucher={voucher}
+                  isFresh={id === freshVoucherId}
+                  isCelebrating={id === justRedeemedId}
+                  onToggle={() => toggle(id)}
+                  onShowDetails={showDetails}
+                  onDismissRedeemed={() => {
+                    passAnimation();
+                    onDismissRedeemed();
+                  }}
+                />
+              );
+            }}
+          />
 
-      <TopUpSheet
-        visible={topUpOpen}
-        balance={wallet.balance}
-        cardLast4={wallet.cardLast4}
-        onClose={closeTopUp}
-        onConfirm={onTopUp}
+          {stackVouchers.length === 0 ? (
+            <View style={styles.emptySlot}>
+              <View style={styles.emptyIcon}>
+                <Ticket color={colors.gold} size={20} />
+              </View>
+              <View style={styles.emptyCopy}>
+                <Text style={styles.emptyTitle}>{empty.title}</Text>
+                <Text style={styles.emptyBody}>{empty.body}</Text>
+              </View>
+            </View>
+          ) : null}
+
+          <View style={styles.balance}>
+            <BalanceRow
+              balance={wallet.balance}
+              cardLast4={wallet.cardLast4}
+              transactions={balanceTransactions}
+              onTopUp={onTopUp}
+            />
+          </View>
+
+          {vouchers.length > 0 ? (
+            <>
+              <SectionHeader
+                title="Reward history"
+                accessory={<Text style={styles.accessory}>{formatPoints(pointsUsed)} pts used</Text>}
+              />
+              <RewardHistory vouchers={vouchers} onOpen={showDetails} />
+            </>
+          ) : null}
+        </>
+      )}
+
+      <PassDetailsSheet
+        voucher={detailsVoucher}
+        description={rewards.find((reward) => reward.id === detailsVoucher?.rewardId)?.description}
+        visible={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
       />
     </View>
   );
@@ -147,26 +311,6 @@ function SectionHeader({ accessory, title }: { title: string; accessory?: ReactN
   );
 }
 
-interface QuickActionProps {
-  label: string;
-  Icon: LucideIcon;
-  onPress: () => void;
-  primary?: boolean;
-}
-
-function QuickAction({ Icon, label, onPress, primary }: QuickActionProps) {
-  return (
-    <PressableScale accessibilityLabel={label} onPress={onPress} pressedScale={0.92} style={styles.action}>
-      <View style={styles.actionInner}>
-        <View style={[styles.actionIcon, primary && styles.actionIconPrimary]}>
-          <Icon color={primary ? '#1A1200' : colors.text} size={22} strokeWidth={primary ? 2.6 : 2} />
-        </View>
-        <Text style={styles.actionLabel} numberOfLines={1}>{label}</Text>
-      </View>
-    </PressableScale>
-  );
-}
-
 const styles = StyleSheet.create({
   header: {
     height: 62,
@@ -175,60 +319,99 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   title: {
     color: colors.text,
     fontFamily: font.semibold,
     fontSize: 24,
     letterSpacing: -0.6,
   },
-  pointsPill: {
-    borderRadius: 18,
+  readyPill: {
+    height: 24,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    justifyContent: 'center',
+    backgroundColor: colors.goldSoft,
   },
-  pointsPillInner: {
-    height: 36,
-    paddingHorizontal: 12,
-    borderRadius: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
-  pointsText: {
-    color: colors.text,
+  readyText: {
+    color: colors.gold,
     fontFamily: font.semibold,
-    fontSize: 13,
+    fontSize: 12,
   },
-  actions: {
-    marginTop: 20,
-    flexDirection: 'row',
+  browse: {
+    borderRadius: 18,
   },
-  action: {
-    flex: 1,
-  },
-  actionInner: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  actionIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  browseInner: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.panelRaised,
+    backgroundColor: 'rgba(255,255,255,0.03)',
   },
-  actionIconPrimary: {
-    borderColor: colors.gold,
-    backgroundColor: colors.gold,
+  placeholder: {
+    padding: 24,
+    alignItems: 'center',
+    gap: 8,
   },
-  actionLabel: {
+  placeholderTitle: {
+    marginTop: 4,
+    color: colors.text,
+    fontFamily: font.semibold,
+    fontSize: 16,
+  },
+  placeholderText: {
     color: colors.textMuted,
-    fontFamily: font.medium,
-    fontSize: 12,
+    fontFamily: font.regular,
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  retry: {
+    marginTop: 8,
+  },
+  emptySlot: {
+    marginTop: 12,
+    minHeight: 96,
+    padding: 16,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(244,200,74,0.3)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  emptyIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.goldSoft,
+  },
+  emptyCopy: {
+    flex: 1,
+  },
+  emptyTitle: {
+    color: colors.text,
+    fontFamily: font.semibold,
+    fontSize: 15,
+  },
+  emptyBody: {
+    marginTop: 3,
+    color: colors.textMuted,
+    fontFamily: font.regular,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  balance: {
+    marginTop: 28,
   },
   sectionHeader: {
     marginTop: 30,
@@ -243,41 +426,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: -0.3,
   },
-  readyBadge: {
-    color: colors.gold,
+  accessory: {
+    color: colors.textMuted,
     fontFamily: font.medium,
     fontSize: 13,
-  },
-  manage: {
-    marginTop: 28,
-  },
-  manageRow: {
-    minHeight: 68,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  manageIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  manageCopy: {
-    flex: 1,
-  },
-  manageTitle: {
-    color: colors.text,
-    fontFamily: font.medium,
-    fontSize: 15,
-  },
-  manageSubtitle: {
-    marginTop: 2,
-    color: colors.textSubtle,
-    fontFamily: font.regular,
-    fontSize: 12,
   },
 });

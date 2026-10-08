@@ -13,13 +13,14 @@ interface PointsScreenProps {
   rewards: Reward[];
   earningRules: EarningRule[];
   tiers: Tier[];
-  onOpenRedeem: (rewardId: string) => void;
-  onOpenHistory: () => void;
+  // Opens the claim sheet; the voucher then lands in the Wallet.
+  onClaimReward: (rewardId: string) => void;
+  onOpenVouchers: () => void;
 }
 
 const ruleIcons = [Star, Beer, UserPlus, MessageSquareText];
 
-export function PointsScreen({ points, rewards, earningRules, tiers, onOpenRedeem, onOpenHistory }: PointsScreenProps) {
+export function PointsScreen({ points, rewards, earningRules, tiers, onClaimReward, onOpenVouchers }: PointsScreenProps) {
   const progressValue = useRef(new Animated.Value(0)).current;
 
   // Sort tiers ascending by threshold so current/next logic doesn't depend on prop order.
@@ -58,8 +59,8 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onOpenRedee
     <View>
       <View style={styles.headerRow}>
         <Text style={styles.title}>Your Points</Text>
-        <PressableScale accessibilityLabel="View history" onPress={onOpenHistory}>
-          <Text style={styles.history}>History</Text>
+        <PressableScale accessibilityLabel="My vouchers in Wallet" onPress={onOpenVouchers}>
+          <Text style={styles.history}>My vouchers</Text>
         </PressableScale>
       </View>
 
@@ -128,12 +129,7 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onOpenRedee
         })}
       </SectionCard>
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Redeem Points</Text>
-        <PressableScale accessibilityLabel="View rewards" onPress={() => onOpenRedeem(rewards[0]?.id ?? '')}>
-          <Text style={styles.viewAll}>View all</Text>
-        </PressableScale>
-      </View>
+      <Text style={styles.sectionTitle}>Redeem Points</Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rewardList}>
         {rewards.map((reward) => (
@@ -142,7 +138,7 @@ export function PointsScreen({ points, rewards, earningRules, tiers, onOpenRedee
               <View style={styles.rewardCopy}>
                 <Text style={styles.rewardTitle}>{reward.title}</Text>
                 <Text style={styles.rewardPoints}>{formatPoints(reward.points)} pts</Text>
-                <GoldButton label="Redeem" compact onPress={() => onOpenRedeem(reward.id)} testID={`reward-${reward.id}`} />
+                <GoldButton label="Redeem" compact onPress={() => onClaimReward(reward.id)} testID={`reward-${reward.id}`} />
               </View>
               <Image source={{ uri: reward.imageUrl }} style={styles.rewardImage} />
             </View>
@@ -299,16 +295,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   rulePoints: {
-    color: colors.gold,
-    fontFamily: font.medium,
-    fontSize: 14,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-  },
-  viewAll: {
     color: colors.gold,
     fontFamily: font.medium,
     fontSize: 14,

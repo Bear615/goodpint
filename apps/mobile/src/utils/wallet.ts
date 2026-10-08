@@ -29,13 +29,6 @@ function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-// Monday, matching the en-GB week the rest of the app formats in.
-function startOfWeek(date: Date): Date {
-  const day = startOfDay(date);
-  day.setDate(day.getDate() - ((day.getDay() + 6) % 7));
-  return day;
-}
-
 // Rounded rather than floored so a daylight-saving shift can't turn one day
 // into 0.96 of one.
 function daysBetween(later: Date, earlier: Date): number {
@@ -95,59 +88,6 @@ export function groupByDay(transactions: Transaction[], now = new Date()): Trans
     else groups.push({ label, items: [transaction] });
   }
   return groups;
-}
-
-export interface WeekDay {
-  label: string;
-  spent: number;
-  isToday: boolean;
-  isFuture: boolean;
-}
-
-export interface WeeklySummary {
-  days: WeekDay[];
-  spent: number;
-  added: number;
-  orders: number;
-  lastWeekSpent: number;
-}
-
-const WEEKDAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-export function weeklySummary(transactions: Transaction[], now = new Date()): WeeklySummary {
-  const weekStart = startOfWeek(now);
-  const todayIndex = daysBetween(now, weekStart);
-  const days: WeekDay[] = WEEKDAY_INITIALS.map((label, index) => ({
-    label,
-    spent: 0,
-    isToday: index === todayIndex,
-    isFuture: index > todayIndex,
-  }));
-
-  let added = 0;
-  let orders = 0;
-  let lastWeekSpent = 0;
-
-  for (const transaction of transactions) {
-    const date = transactionDate(transaction);
-    if (!date) continue;
-    const index = daysBetween(date, weekStart);
-
-    if (index >= -7 && index < 0 && transaction.amount < 0) {
-      lastWeekSpent += -transaction.amount;
-    }
-    if (index < 0 || index > 6) continue;
-
-    if (transaction.amount < 0) {
-      days[index].spent += -transaction.amount;
-      orders += 1;
-    } else if (transaction.amount > 0) {
-      added += transaction.amount;
-    }
-  }
-
-  const spent = days.reduce((total, day) => total + day.spent, 0);
-  return { days, spent, added, orders, lastWeekSpent };
 }
 
 export type VoucherTiming = { label: string; urgent: boolean };

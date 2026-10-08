@@ -63,7 +63,7 @@ export interface Transaction {
   amount: number;
   timestamp: string;
   // ISO time from the server. Optional so an older API still renders, just
-  // without day grouping or the weekly chart.
+  // without grouping by day.
   createdAt?: string;
 }
 
@@ -159,3 +159,17 @@ export interface AppStatePayload {
   vouchers: Voucher[];
   profile: MemberProfile;
 }
+
+// Whether the first /api/app-state load has landed. Until it has, the seeded
+// empty state must not be shown as if it were the user's real wallet.
+export type AppLoadStatus = 'loading' | 'ready' | 'error';
+
+// Points just earned by an order, shown on the membership pass.
+export interface RecentEarn {
+  points: number;
+  venueName: string;
+}
+
+// Claims resolve to a value rather than throwing, so the claim sheet can show
+// the error inline (Alert is a no-op on web).
+export type ClaimResult = { ok: true } | { ok: false; message: string };

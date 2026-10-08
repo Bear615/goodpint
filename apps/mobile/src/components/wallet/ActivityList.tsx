@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
-import { LayoutAnimation, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LayoutAnimation, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ArrowDownLeft, CircleCheck, Gift, Receipt } from 'lucide-react-native';
 import { colors, font } from '../../theme';
 import type { Transaction } from '../../types';
@@ -13,50 +13,26 @@ import {
   transactionFullDate,
   transactionKind,
   transactionTime,
-  type TransactionKind,
 } from '../../utils/wallet';
 import { BottomSheet } from '../BottomSheet';
 import { GoldButton } from '../GoldButton';
 import { PressableScale } from '../Motion';
 import { SectionCard } from '../SectionCard';
 
-type Filter = 'all' | TransactionKind;
-
-const FILTERS: Array<{ id: Filter; label: string }> = [
-  { id: 'all', label: 'All' },
-  { id: 'purchase', label: 'Spent' },
-  { id: 'topup', label: 'Added' },
-  { id: 'reward', label: 'Rewards' },
-];
-
-const PREVIEW_COUNT = 6;
-const MASK = '••••';
-
 interface ActivityListProps {
   transactions: Transaction[];
-  hidden: boolean;
+  // How many rows show before "See all".
+  previewCount?: number;
 }
 
-export function ActivityList({ hidden, transactions }: ActivityListProps) {
-  const [filter, setFilter] = useState<Filter>('all');
+export function ActivityList({ previewCount = 6, transactions }: ActivityListProps) {
   const [expanded, setExpanded] = useState(false);
   const [receipt, setReceipt] = useState<Transaction | null>(null);
   // Held separately so the sheet keeps its content while it animates away.
   const [receiptOpen, setReceiptOpen] = useState(false);
 
-  const filtered = useMemo(
-    () => (filter === 'all' ? transactions : transactions.filter((tx) => transactionKind(tx) === filter)),
-    [filter, transactions],
-  );
-  const visible = expanded ? filtered : filtered.slice(0, PREVIEW_COUNT);
+  const visible = expanded ? transactions : transactions.slice(0, previewCount);
   const groups = useMemo(() => groupByDay(visible), [visible]);
-
-  const chooseFilter = (next: Filter) => {
-    if (next === filter) return;
-    void Haptics.selectionAsync();
-    LayoutAnimation.configureNext(LayoutAnimation.create(220, 'easeInEaseOut', 'opacity'));
-    setFilter(next);
-  };
 
   const openReceipt = (transaction: Transaction) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -66,31 +42,12 @@ export function ActivityList({ hidden, transactions }: ActivityListProps) {
 
   return (
     <View>
-      {transactions.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-          {FILTERS.map((option) => {
-            const active = option.id === filter;
-            return (
-              <Pressable
-                key={option.id}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                onPress={() => chooseFilter(option.id)}
-                style={[styles.filter, active && styles.filterActive]}
-              >
-                <Text style={[styles.filterText, active && styles.filterTextActive]}>{option.label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      ) : null}
-
       {groups.length === 0 ? (
-        <SectionCard style={transactions.length > 0 && styles.emptyFiltered}>
+        <SectionCard style={styles.emptyCard}>
           <View style={styles.empty}>
             <Receipt color={colors.textSubtle} size={26} strokeWidth={1.6} />
-            <Text style={styles.emptyTitle}>{filter === 'all' ? 'No activity yet' : `Nothing under ${FILTERS.find((f) => f.id === filter)?.label}`}</Text>
-            <Text style={styles.emptyText}>Top-ups, orders and rewards will show up here.</Text>
+            <Text style={styles.emptyTitle}>No balance activity yet</Text>
+            <Text style={styles.emptyText}>Top-ups and drinks orders show up here.</Text>
           </View>
         </SectionCard>
       ) : (
@@ -113,7 +70,7 @@ export function ActivityList({ hidden, transactions }: ActivityListProps) {
                         {transactionTime(transaction)} · {kindLabels[transactionKind(transaction)]}
                       </Text>
                     </View>
-                    <AmountText transaction={transaction} hidden={hidden} />
+                    <AmountText transaction={transaction} />
                   </View>
                 </PressableScale>
               ))}
@@ -122,7 +79,7 @@ export function ActivityList({ hidden, transactions }: ActivityListProps) {
         ))
       )}
 
-      {filtered.length > PREVIEW_COUNT ? (
+      {transactions.length > previewCount ? (
         <Pressable
           accessibilityRole="button"
           onPress={() => {
@@ -131,23 +88,23 @@ export function ActivityList({ hidden, transactions }: ActivityListProps) {
           }}
           style={styles.more}
         >
-          <Text style={styles.moreText}>{expanded ? 'Show less' : `See all ${filtered.length} transactions`}</Text>
+          <Text style={styles.moreText}>{expanded ? 'Show less' : `See all ${transactions.length} transactions`}</Text>
         </Pressable>
       ) : null}
 
-      <ReceiptSheet transaction={receipt} visible={receiptOpen} hidden={hidden} onClose={() => setReceiptOpen(false)} />
+      <ReceiptSheet transaction={receipt} visible={receiptOpen} onClose={() => setReceiptOpen(false)} />
     </View>
   );
 }
 
-function AmountText({ hidden, large, transaction }: { transaction: Transaction; hidden: boolean; large?: boolean }) {
+function AmountText({ large, transaction }: { transaction: Transaction; large?: boolean }) {
   const kind = transactionKind(transaction);
   if (kind === 'reward') {
     return <Text style={[styles.amount, styles.amountReward, large && styles.amountLarge]}>Reward</Text>;
   }
   return (
     <Text style={[styles.amount, kind === 'topup' && styles.amountIn, large && styles.amountLarge]}>
-      {hidden ? MASK : formatAmount(transaction.amount)}
+      {formatAmount(transaction.amount)}
     </Text>
   );
 }
@@ -186,11 +143,10 @@ function TransactionAvatar({ size = 42, transaction }: { transaction: Transactio
 interface ReceiptSheetProps {
   transaction: Transaction | null;
   visible: boolean;
-  hidden: boolean;
   onClose: () => void;
 }
 
-function ReceiptSheet({ hidden, onClose, transaction, visible }: ReceiptSheetProps) {
+function ReceiptSheet({ onClose, transaction, visible }: ReceiptSheetProps) {
   if (!transaction) return null;
   const kind = transactionKind(transaction);
   const reference = transaction.id.replace(/[^a-zA-Z0-9]/g, '').slice(-10).toUpperCase();
@@ -199,8 +155,8 @@ function ReceiptSheet({ hidden, onClose, transaction, visible }: ReceiptSheetPro
     ['Time', transactionTime(transaction)],
     ['Type', kindLabels[kind]],
     kind === 'topup'
-      ? ['Added to', 'GoodPint Card']
-      : ['Paid with', kind === 'reward' ? 'GoodPint Points' : 'GoodPint Card'],
+      ? ['Added to', 'GoodPint balance']
+      : ['Paid with', kind === 'reward' ? 'GoodPint Points' : 'GoodPint balance'],
     ['Reference', reference],
   ];
 
@@ -209,7 +165,7 @@ function ReceiptSheet({ hidden, onClose, transaction, visible }: ReceiptSheetPro
       <View style={styles.receiptHead}>
         <TransactionAvatar transaction={transaction} size={64} />
         <Text style={styles.receiptTitle} numberOfLines={2}>{transaction.title}</Text>
-        <AmountText transaction={transaction} hidden={hidden} large />
+        <AmountText transaction={transaction} large />
         <View style={styles.receiptStatus}>
           <CircleCheck color={colors.success} size={14} />
           <Text style={styles.receiptStatusText}>Completed</Text>
@@ -231,32 +187,6 @@ function ReceiptSheet({ hidden, onClose, transaction, visible }: ReceiptSheetPro
 }
 
 const styles = StyleSheet.create({
-  filters: {
-    gap: 8,
-    paddingBottom: 4,
-  },
-  filter: {
-    height: 34,
-    paddingHorizontal: 16,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
-  filterActive: {
-    borderColor: colors.text,
-    backgroundColor: colors.text,
-  },
-  filterText: {
-    color: colors.textMuted,
-    fontFamily: font.medium,
-    fontSize: 13,
-  },
-  filterTextActive: {
-    color: '#080808',
-  },
   group: {
     marginTop: 16,
   },
@@ -318,7 +248,7 @@ const styles = StyleSheet.create({
     fontSize: 38,
     letterSpacing: -1.2,
   },
-  emptyFiltered: {
+  emptyCard: {
     marginTop: 12,
   },
   empty: {

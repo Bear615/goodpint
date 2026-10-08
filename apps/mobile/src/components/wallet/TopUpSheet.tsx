@@ -114,7 +114,7 @@ export function TopUpSheet({ balance, cardLast4, onClose, onConfirm, visible }: 
       ) : (
         <>
           <Text style={styles.title}>Add money</Text>
-          <Text style={styles.subtitle}>To your GoodPint Card · Balance {formatCurrency(balance)}</Text>
+          <Text style={styles.subtitle}>Balance {formatCurrency(balance)}</Text>
 
           <Animated.View style={[styles.amountRow, { transform: [{ translateX: shake }] }]}>
             <Text style={[styles.currency, { fontSize: amountSize * 0.55 }]}>£</Text>
